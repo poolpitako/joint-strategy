@@ -81,6 +81,7 @@ contract Joint {
 
         IERC20(tokenA).approve(address(router), type(uint256).max);
         IERC20(tokenB).approve(address(router), type(uint256).max);
+        IERC20(getPair()).approve(address(router), type(uint256).max);
     }
 
     event Cloned(address indexed clone);
@@ -170,8 +171,7 @@ contract Joint {
         // TODO: do the uni magic to convert reward into tokenA and tokenB
     }
 
-    function liquidatePosition() external {
-        require(msg.sender == strategist || msg.sender == gov);
+    function liquidatePosition() internal {
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
             tokenB,
@@ -181,7 +181,6 @@ contract Joint {
             address(this),
             now
         );
-        distributeProfit();
     }
 
     function distributeProfit() internal {
@@ -196,10 +195,13 @@ contract Joint {
         }
     }
 
-    function balanceOfPair() public view returns (uint256) {
+    function getPair() public view returns (address) {
         address factory = IUniswapV2Router02(router).factory();
-        address pair = IUniswapV2Factory(factory).getPair(tokenA, tokenB);
-        return IERC20(pair).balanceOf(address(this));
+        return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
+    }
+
+    function balanceOfPair() public view returns (uint256) {
+        return IERC20(getPair()).balanceOf(address(this));
     }
 
     function balanceOfA() public view returns (uint256) {

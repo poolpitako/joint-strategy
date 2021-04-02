@@ -49,4 +49,3 @@ def test_operation(
 
     providerA.balanceOfWant() > 0
     providerB.balanceOfWant() > 0
-    assert 1 == 2
