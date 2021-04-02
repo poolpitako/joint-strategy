@@ -1,4 +1,8 @@
-# Yearn Strategy Brownie Mix
+# Yearn Joint Strategy
+
+Read more at
+https://hackmd.io/rbPUCp47Sl2dSht6VTaiLg?both
+
 
 ## What you'll find here
 
