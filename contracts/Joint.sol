@@ -12,7 +12,7 @@ import "@openzeppelin/contracts/math/Math.sol";
 
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
-import "../interfaces/IMasterchef.sol";
+import "../interfaces/IMasterChef.sol";
 
 interface IERC20Extended {
     function decimals() external view returns (uint8);
