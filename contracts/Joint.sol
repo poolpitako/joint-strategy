@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/math/Math.sol";
 
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
+import "../interfaces/IMasterchef.sol";
 
 interface IERC20Extended {
     function decimals() external view returns (uint8);
@@ -23,6 +24,7 @@ contract Joint {
 
     address public tokenA;
     address public providerA;
+    address public reward;
 
     address public tokenB;
     address public providerB;
@@ -34,6 +36,21 @@ contract Joint {
     address public pendingGov;
     address public keeper;
     address public strategist;
+    address public WETH;
+
+    uint _pid = 1;
+
+    IMasterchef public masterchef;
+
+    modifier onlyGov {
+        require(msg.sender == gov);
+        _;
+    }
+
+    modifier onlyGovOrStrategist {
+        require(msg.sender == gov || msg.sender == strategist);
+        _;
+    }
 
     constructor(
         address _gov,
@@ -144,6 +161,7 @@ contract Joint {
 
         if (reinvest) {
             createLP();
+            depositLP();
         } else {
             liquidatePosition();
             distributeProfit();
@@ -163,18 +181,59 @@ contract Joint {
         );
     }
 
-    function getReward() internal {
-        // TODO get reward
-
+    function setMasterChef(address _masterchef) external onlyGov {
+        masterchef = IMasterchef(_masterchef);
     }
 
-    function depositLP() internal {
-        // TODO invest the lp
+    function setWETH(address _weth) external onlyGov {
+        WETH = _weth;
+    }
 
+    function findSwapTo(address token) internal view returns (address) {
+        if(tokenA == token) {
+            return tokenB;
+        }
+        else if (tokenB == token) {
+            return tokenA;
+        }
+        else {return address(0);}
+    }
+
+    function getTokenOutPath(address _token_in, address _token_out) internal view returns (address[] memory _path) {
+        bool is_weth = _token_in == address(WETH) || _token_out == address(WETH);
+        _path = new address[](is_weth ? 2 : 3);
+        _path[0] = _token_in;
+        if (is_weth) {
+            _path[1] = _token_out;
+        } else {
+            _path[1] = address(WETH);
+            _path[2] = _token_out;
+        }
+    }
+
+    function getReward() internal {
+        masterchef.deposit(_pid,0);
+    }
+
+    function depositLP() internal  {
+        if(balanceOfPair() > 0)
+            masterchef.deposit(_pid,balanceOfPair());
     }
 
     function swapReward() internal {
-        // TODO: do the uni magic to convert reward into tokenA and tokenB
+        bool shouldSwapOnlyOne = tokenA != reward && tokenB != reward;
+        uint rewardBal = IERC20(reward).balanceOf(address(this));
+        //Both tokens arent the reward we are getting,so swap reward to 50/50 ratio of rewards
+        if(!shouldSwapOnlyOne) {
+            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardBal / 2, 0, getTokenOutPath(reward,tokenA), address(this), block.timestamp);
+            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardBal / 2, 0, getTokenOutPath(reward,tokenB), address(this), block.timestamp);
+        }
+        else {
+            address swapTo = findSwapTo(reward);
+            require(swapTo != address(0),"!SwapTo");
+            //Call swap to get more of the of the swapTo token
+            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardBal / 2, 0, getTokenOutPath(reward,swapTo), address(this), block.timestamp);
+        }
     }
 
     function liquidatePosition() internal {
@@ -218,33 +277,31 @@ contract Joint {
         return IERC20(tokenB).balanceOf(address(this));
     }
 
-    function setReinvest(bool _reinvest) external {
-        require(msg.sender == strategist || msg.sender == gov);
+    function setReinvest(bool _reinvest) external onlyGovOrStrategist {
         reinvest = _reinvest;
     }
 
-    function setProviderA(address _providerA) external {
-        require(msg.sender == gov);
+    function setProviderA(address _providerA) external onlyGov {
         providerA = _providerA;
     }
 
-    function setProviderB(address _providerB) external {
-        require(msg.sender == gov);
+    function setProviderB(address _providerB) external onlyGov {
         providerB = _providerB;
     }
 
-    function setStrategist(address _strategist) external {
-        require(msg.sender == gov);
+    function setReward(address _reward) external onlyGov {
+        reward = _reward;
+    }
+
+    function setStrategist(address _strategist) external onlyGov {
         strategist = _strategist;
     }
 
-    function setKeeper(address _keeper) external {
-        require(msg.sender == gov);
+    function setKeeper(address _keeper) external onlyGovOrStrategist{
         keeper = _keeper;
     }
 
-    function setPendingGovernor(address _pendingGov) external {
-        require(msg.sender == gov);
+    function setPendingGovernor(address _pendingGov) external onlyGov {
         pendingGov = _pendingGov;
     }
 
