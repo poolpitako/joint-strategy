@@ -38,7 +38,7 @@ contract Joint {
     address public strategist;
     address public WETH;
 
-    uint _pid = 1;
+    uint public _pid = 1;
 
     IMasterchef public masterchef;
 
@@ -183,6 +183,10 @@ contract Joint {
 
     function setMasterChef(address _masterchef) external onlyGov {
         masterchef = IMasterchef(_masterchef);
+    }
+
+    function setPid(uint _newPid) external onlyGov {
+        _pid = _newPid;
     }
 
     function setWETH(address _weth) external onlyGov {
