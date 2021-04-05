@@ -44,6 +44,12 @@ def vaultA():
 
 
 @pytest.fixture
+def wftm():
+    # WFTM token
+    yield Contract("0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83")
+
+
+@pytest.fixture
 def tokenA_whale(accounts):
     yield accounts.at("0xbb634cafef389cdd03bb276c82738726079fcf2e", force=True)
 
@@ -65,8 +71,25 @@ def vaultB():
 
 
 @pytest.fixture
-def joint(gov, keeper, strategist, tokenA, tokenB, Joint, router):
+def ice_rewards():
+    # ICE masterchef
+    yield Contract("0x05200cb2cee4b6144b2b2984e246b52bb1afcbd0")
+
+
+@pytest.fixture
+def ice():
+    # ICE token
+    yield Contract("0xf16e81dce15b08f326220742020379b855b87df9")
+
+
+@pytest.fixture
+def joint(
+    gov, keeper, strategist, tokenA, tokenB, Joint, router, ice_rewards, ice, wftm
+):
     joint = gov.deploy(Joint, gov, keeper, strategist, tokenA, tokenB, router)
+    joint.setMasterChef(ice_rewards, {"from": gov})
+    joint.setReward(ice, {"from": gov})
+    joint.setWETH(wftm, {"from": gov})
     yield joint
 
 
@@ -89,7 +112,7 @@ def providerA(gov, strategist, keeper, vaultA, ProviderStrategy, joint):
         strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultA.governance()}
     )
 
-    joint.setProviderA(strategy)
+    joint.setProviderA(strategy, {"from": gov})
 
     yield strategy
 
@@ -107,6 +130,6 @@ def providerB(gov, strategist, keeper, vaultB, ProviderStrategy, joint):
         strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultB.governance()}
     )
 
-    joint.setProviderB(strategy)
+    joint.setProviderB(strategy, {"from": gov})
 
     yield strategy

@@ -29,12 +29,8 @@ contract Joint {
 
     address public tokenA;
     address public providerA;
-    address public reward;
-
     address public tokenB;
     address public providerB;
-    address public router;
-
     bool public reinvest;
 
     address public gov;
@@ -42,9 +38,9 @@ contract Joint {
     address public keeper;
     address public strategist;
     address public WETH;
-
-    uint256 public pid = 1;
-
+    address public reward;
+    address public router;
+    uint256 public pid;
     IMasterchef public masterchef;
 
     modifier onlyGov {
@@ -104,7 +100,7 @@ contract Joint {
         tokenA = _tokenA;
         tokenB = _tokenB;
         router = _router;
-
+        pid = 1;
         reinvest = true;
 
         IERC20(tokenA).approve(address(router), type(uint256).max);
@@ -164,8 +160,16 @@ contract Joint {
     }
 
     function harvest() external onlyGuardians {
+        // Gets the reward from the masterchef contract
         getReward();
-        swapReward();
+        if (balanceOfReward() > 0) {
+            swapReward();
+        }
+
+        // No capital, nothing to do
+        if (balanceOfA() == 0 && balanceOfB() == 0) {
+            return;
+        }
 
         if (reinvest) {
             createLP();
@@ -237,7 +241,7 @@ contract Joint {
     }
 
     function swapReward() internal {
-        bool shouldSwapOnlyOne = tokenA != reward && tokenB != reward;
+        bool shouldSwapOnlyOne = tokenA == reward || tokenB == reward;
         uint256 rewardBal = IERC20(reward).balanceOf(address(this));
         //Both tokens arent the reward we are getting,so swap reward to 50/50 ratio of rewards
         if (!shouldSwapOnlyOne) {
@@ -247,7 +251,7 @@ contract Joint {
                 0,
                 getTokenOutPath(reward, tokenA),
                 address(this),
-                block.timestamp
+                now
             );
             IUniswapV2Router02(router)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
@@ -255,7 +259,7 @@ contract Joint {
                 0,
                 getTokenOutPath(reward, tokenB),
                 address(this),
-                block.timestamp
+                now
             );
         } else {
             address swapTo = findSwapTo(reward);
@@ -266,12 +270,13 @@ contract Joint {
                 0,
                 getTokenOutPath(reward, swapTo),
                 address(this),
-                block.timestamp
+                now
             );
         }
     }
 
     function liquidatePosition() public onlyGuardians {
+        masterchef.withdraw(pid, balanceOfStake());
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
             tokenB,
@@ -310,6 +315,18 @@ contract Joint {
 
     function balanceOfB() public view returns (uint256) {
         return IERC20(tokenB).balanceOf(address(this));
+    }
+
+    function balanceOfReward() public view returns (uint256) {
+        return IERC20(reward).balanceOf(address(this));
+    }
+
+    function balanceOfStake() public view returns (uint256) {
+        return masterchef.userInfo(pid, address(this)).amount;
+    }
+
+    function pendingReward() public view returns (uint256) {
+        return masterchef.pendingIce(pid, address(this));
     }
 
     function setReinvest(bool _reinvest) external onlyGovOrStrategist {
