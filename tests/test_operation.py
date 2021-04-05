@@ -1,114 +1,51 @@
 import brownie
-from brownie import Contract
 import pytest
+from brownie import Contract, Wei
 
 
 def test_operation(
-    accounts, token, vault, strategy, strategist, amount, RELATIVE_APPROX
+    vaultA,
+    vaultB,
+    tokenA,
+    tokenB,
+    providerA,
+    providerB,
+    joint,
+    gov,
+    strategist,
+    tokenA_whale,
+    tokenB_whale,
 ):
-    # Deposit to the vault
-    token.approve(vault.address, amount, {"from": accounts[0]})
-    vault.deposit(amount, {"from": accounts[0]})
-    assert token.balanceOf(vault.address) == amount
 
-    # harvest
-    strategy.harvest()
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
+    tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
+    vaultA.deposit({"from": tokenA_whale})
 
-    # tend()
-    strategy.tend()
+    tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
+    vaultB.deposit({"from": tokenB_whale})
 
-    # withdrawal
-    vault.withdraw({"from": accounts[0]})
-    assert pytest.approx(token.balanceOf(accounts[0]), rel=RELATIVE_APPROX) == amount
+    # https://www.coingecko.com/en/coins/fantom
+    tokenA_price = 0.438065
+    # https://www.coingecko.com/en/coins/popsicle-finance
+    tokenB_price = 4.47
+    usd_amount = Wei("1000 ether")
 
+    vaultA.updateStrategyMaxDebtPerHarvest(
+        providerA, usd_amount // tokenA_price, {"from": vaultA.governance()}
+    )
+    vaultB.updateStrategyMaxDebtPerHarvest(
+        providerB, usd_amount // tokenB_price, {"from": vaultB.governance()}
+    )
 
-def test_emergency_exit(
-    accounts, token, vault, strategy, strategist, amount, RELATIVE_APPROX
-):
-    # Deposit to the vault
-    token.approve(vault.address, amount, {"from": accounts[0]})
-    vault.deposit(amount, {"from": accounts[0]})
-    strategy.harvest()
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
+    providerA.harvest({"from": strategist})
+    providerB.harvest({"from": strategist})
+    assert joint.balanceOfA() * usd_amount > Wei("990 ether")
+    assert joint.balanceOfB() * usd_amount > Wei("990 ether")
 
-    # set emergency and exit
-    strategy.setEmergencyExit()
-    strategy.harvest()
-    assert strategy.estimatedTotalAssets() < amount
+    joint.harvest({"from": strategist})
+    assert joint.balanceOfPair() > 0
 
+    joint.setReinvest(False, {"from": strategist})
+    joint.harvest({"from": strategist})
 
-def test_profitable_harvest(
-    accounts, token, vault, strategy, strategist, amount, RELATIVE_APPROX
-):
-    # Deposit to the vault
-    token.approve(vault.address, amount, {"from": accounts[0]})
-    vault.deposit(amount, {"from": accounts[0]})
-    assert token.balanceOf(vault.address) == amount
-
-    # harvest
-    strategy.harvest()
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
-
-    # You should test that the harvest method is capable of making a profit.
-    # TODO: uncomment the following lines.
-    # strategy.harvest()
-    # chain.sleep(3600 * 24)
-    # assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
-    # assert token.balanceOf(vault.address) > 0
-
-
-def test_change_debt(gov, token, vault, strategy, strategist, amount, RELATIVE_APPROX):
-    # Deposit to the vault and harvest
-    token.approve(vault.address, amount, {"from": gov})
-    vault.deposit(amount, {"from": gov})
-    vault.updateStrategyDebtRatio(strategy.address, 5_000, {"from": gov})
-    strategy.harvest()
-    half = int(amount / 2)
-
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == half
-
-    vault.updateStrategyDebtRatio(strategy.address, 10_000, {"from": gov})
-    strategy.harvest()
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
-
-    # In order to pass this tests, you will need to implement prepareReturn.
-    # TODO: uncomment the following lines.
-    # vault.updateStrategyDebtRatio(strategy.address, 5_000, {"from": gov})
-    # strategy.harvest()
-    # assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == half
-
-
-def test_sweep(gov, vault, strategy, token, amount, weth, weth_amout):
-    # Strategy want token doesn't work
-    token.transfer(strategy, amount, {"from": gov})
-    assert token.address == strategy.want()
-    assert token.balanceOf(strategy) > 0
-    with brownie.reverts("!want"):
-        strategy.sweep(token, {"from": gov})
-
-    # Vault share token doesn't work
-    with brownie.reverts("!shares"):
-        strategy.sweep(vault.address, {"from": gov})
-
-    # TODO: If you add protected tokens to the strategy.
-    # Protected token doesn't work
-    # with brownie.reverts("!protected"):
-    #     strategy.sweep(strategy.protectedToken(), {"from": gov})
-
-    weth.transfer(strategy, weth_amout, {"from": gov})
-    assert weth.address != strategy.want()
-    assert weth.balanceOf(gov) == 0
-    strategy.sweep(weth, {"from": gov})
-    assert weth.balanceOf(gov) == weth_amout
-
-
-def test_triggers(gov, vault, strategy, token, amount, weth, weth_amout):
-    # Deposit to the vault and harvest
-    token.approve(vault.address, amount, {"from": gov})
-    vault.deposit(amount, {"from": gov})
-    vault.updateStrategyDebtRatio(strategy.address, 5_000, {"from": gov})
-    strategy.harvest()
-
-    strategy.harvestTrigger(0)
-    strategy.tendTrigger(0)
+    providerA.balanceOfWant() > 0
+    providerB.balanceOfWant() > 0

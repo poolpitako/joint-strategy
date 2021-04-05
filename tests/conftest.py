@@ -1,6 +1,5 @@
 import pytest
-from brownie import config
-from brownie import Contract
+from brownie import config, Contract
 
 
 @pytest.fixture
@@ -34,52 +33,80 @@ def keeper(accounts):
 
 
 @pytest.fixture
-def token():
-    token_address = "0x6b175474e89094c44da98b954eedeac495271d0f"  # this should be the address of the ERC-20 used by the strategy/vault (DAI)
-    yield Contract(token_address)
+def tokenA(vaultA):
+    yield Contract(vaultA.token())
 
 
 @pytest.fixture
-def amount(accounts, token):
-    amount = 10_000 * 10 ** token.decimals()
-    # In order to get some funds for the token you are about to use,
-    # it impersonate an exchange address to use it's funds.
-    reserve = accounts.at("0xd551234ae421e3bcba99a0da6d736074f22192ff", force=True)
-    token.transfer(accounts[0], amount, {"from": reserve})
-    yield amount
+def vaultA():
+    # WFTM vault
+    yield Contract("0x36e7aF39b921235c4b01508BE38F27A535851a5c")
 
 
 @pytest.fixture
-def weth():
-    token_address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-    yield Contract(token_address)
+def tokenA_whale(accounts):
+    yield accounts.at("0xbb634cafef389cdd03bb276c82738726079fcf2e", force=True)
 
 
 @pytest.fixture
-def weth_amout(gov, weth):
-    weth_amout = 10 ** weth.decimals()
-    gov.transfer(weth, weth_amout)
-    yield weth_amout
+def tokenB_whale(accounts):
+    yield accounts.at("0x05200cb2cee4b6144b2b2984e246b52bb1afcbd0", force=True)
 
 
 @pytest.fixture
-def vault(pm, gov, rewards, guardian, management, token):
-    Vault = pm(config["dependencies"][0]).Vault
-    vault = guardian.deploy(Vault)
-    vault.initialize(token, gov, rewards, "", "", guardian)
-    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
-    vault.setManagement(management, {"from": gov})
-    yield vault
+def tokenB(vaultB):
+    yield Contract(vaultB.token())
 
 
 @pytest.fixture
-def strategy(strategist, keeper, vault, Strategy, gov):
-    strategy = strategist.deploy(Strategy, vault)
+def vaultB():
+    # ICE vault
+    yield Contract("0xEea0714eC1af3b0D41C624Ba5ce09aC92F4062b1")
+
+
+@pytest.fixture
+def joint(gov, keeper, strategist, tokenA, tokenB, Joint, router):
+    joint = gov.deploy(Joint, gov, keeper, strategist, tokenA, tokenB, router)
+    yield joint
+
+
+@pytest.fixture
+def router():
+    # Sushi in FTM
+    yield Contract("0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506")
+
+
+@pytest.fixture
+def providerA(gov, strategist, keeper, vaultA, ProviderStrategy, joint):
+    strategy = strategist.deploy(ProviderStrategy, vaultA, joint)
     strategy.setKeeper(keeper)
-    vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
+
+    # Steal the debt ratio from strat0 before adding
+    strat_0 = Contract(vaultA.withdrawalQueue(0))
+    debt_ratio = vaultA.strategies(strat_0).dict()["debtRatio"]
+    vaultA.updateStrategyDebtRatio(strat_0, 0, {"from": vaultA.governance()})
+    vaultA.addStrategy(
+        strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultA.governance()}
+    )
+
+    joint.setProviderA(strategy)
+
     yield strategy
 
 
-@pytest.fixture(scope="session")
-def RELATIVE_APPROX():
-    yield 1e-5
+@pytest.fixture
+def providerB(gov, strategist, keeper, vaultB, ProviderStrategy, joint):
+    strategy = strategist.deploy(ProviderStrategy, vaultB, joint)
+    strategy.setKeeper(keeper)
+
+    # Steal the debt ratio from strat0 before adding
+    strat_0 = Contract(vaultB.withdrawalQueue(0))
+    debt_ratio = vaultB.strategies(strat_0).dict()["debtRatio"]
+    vaultB.updateStrategyDebtRatio(strat_0, 0, {"from": vaultB.governance()})
+    vaultB.addStrategy(
+        strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultB.governance()}
+    )
+
+    joint.setProviderB(strategy)
+
+    yield strategy
