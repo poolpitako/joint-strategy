@@ -171,7 +171,6 @@ contract Joint {
             createLP();
             depositLP();
         } else {
-            liquidatePosition();
             distributeProfit();
         }
     }
