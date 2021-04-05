@@ -2,11 +2,8 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import {SafeERC20, SafeMath, IERC20, Address} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
@@ -142,12 +139,11 @@ contract Joint {
                 msg.sender == gov
         );
 
-        // TODO get reward
+        getReward();
         swapReward();
 
         if (reinvest) {
             createLP();
-            // TODO invest the lp
         } else {
             liquidatePosition();
             distributeProfit();
@@ -165,6 +161,16 @@ contract Joint {
             address(this),
             now
         );
+    }
+
+    function getReward() internal {
+        // TODO get reward
+
+    }
+
+    function depositLP() internal {
+        // TODO invest the lp
+
     }
 
     function swapReward() internal {
