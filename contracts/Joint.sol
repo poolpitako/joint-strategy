@@ -43,7 +43,7 @@ contract Joint {
     address public strategist;
     address public WETH;
 
-    uint256 public _pid = 1;
+    uint256 public pid = 1;
 
     IMasterchef public masterchef;
 
@@ -54,6 +54,15 @@ contract Joint {
 
     modifier onlyGovOrStrategist {
         require(msg.sender == gov || msg.sender == strategist);
+        _;
+    }
+
+    modifier onlyGuardians {
+        require(
+            msg.sender == strategist ||
+                msg.sender == keeper ||
+                msg.sender == gov
+        );
         _;
     }
 
@@ -154,13 +163,7 @@ contract Joint {
         return string(abi.encodePacked("JointOf", ab));
     }
 
-    function harvest() external {
-        require(
-            msg.sender == strategist ||
-                msg.sender == keeper ||
-                msg.sender == gov
-        );
-
+    function harvest() external onlyGuardians {
         getReward();
         swapReward();
 
@@ -192,7 +195,7 @@ contract Joint {
     }
 
     function setPid(uint256 _newPid) external onlyGov {
-        _pid = _newPid;
+        pid = _newPid;
     }
 
     function setWETH(address _weth) external onlyGov {
@@ -205,7 +208,7 @@ contract Joint {
         } else if (tokenB == token) {
             return tokenA;
         } else {
-            return address(0);
+            revert("!swapTo");
         }
     }
 
@@ -227,11 +230,11 @@ contract Joint {
     }
 
     function getReward() internal {
-        masterchef.deposit(_pid, 0);
+        masterchef.deposit(pid, 0);
     }
 
     function depositLP() internal {
-        if (balanceOfPair() > 0) masterchef.deposit(_pid, balanceOfPair());
+        if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
     }
 
     function swapReward() internal {
@@ -257,7 +260,6 @@ contract Joint {
             );
         } else {
             address swapTo = findSwapTo(reward);
-            require(swapTo != address(0), "!SwapTo");
             //Call swap to get more of the of the swapTo token
             IUniswapV2Router02(router)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
@@ -270,7 +272,7 @@ contract Joint {
         }
     }
 
-    function liquidatePosition() internal {
+    function liquidatePosition() public onlyGuardians {
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
             tokenB,
