@@ -2,7 +2,12 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-import {SafeERC20, SafeMath, IERC20, Address} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import {
+    SafeERC20,
+    SafeMath,
+    IERC20,
+    Address
+} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 
 import "../interfaces/uni/IUniswapV2Router02.sol";
@@ -38,7 +43,7 @@ contract Joint {
     address public strategist;
     address public WETH;
 
-    uint public _pid = 1;
+    uint256 public _pid = 1;
 
     IMasterchef public masterchef;
 
@@ -183,9 +188,10 @@ contract Joint {
 
     function setMasterChef(address _masterchef) external onlyGov {
         masterchef = IMasterchef(_masterchef);
+        IERC20(getPair()).approve(_masterchef, type(uint256).max);
     }
 
-    function setPid(uint _newPid) external onlyGov {
+    function setPid(uint256 _newPid) external onlyGov {
         _pid = _newPid;
     }
 
@@ -194,17 +200,22 @@ contract Joint {
     }
 
     function findSwapTo(address token) internal view returns (address) {
-        if(tokenA == token) {
+        if (tokenA == token) {
             return tokenB;
-        }
-        else if (tokenB == token) {
+        } else if (tokenB == token) {
             return tokenA;
+        } else {
+            return address(0);
         }
-        else {return address(0);}
     }
 
-    function getTokenOutPath(address _token_in, address _token_out) internal view returns (address[] memory _path) {
-        bool is_weth = _token_in == address(WETH) || _token_out == address(WETH);
+    function getTokenOutPath(address _token_in, address _token_out)
+        internal
+        view
+        returns (address[] memory _path)
+    {
+        bool is_weth =
+            _token_in == address(WETH) || _token_out == address(WETH);
         _path = new address[](is_weth ? 2 : 3);
         _path[0] = _token_in;
         if (is_weth) {
@@ -216,27 +227,46 @@ contract Joint {
     }
 
     function getReward() internal {
-        masterchef.deposit(_pid,0);
+        masterchef.deposit(_pid, 0);
     }
 
-    function depositLP() internal  {
-        if(balanceOfPair() > 0)
-            masterchef.deposit(_pid,balanceOfPair());
+    function depositLP() internal {
+        if (balanceOfPair() > 0) masterchef.deposit(_pid, balanceOfPair());
     }
 
     function swapReward() internal {
         bool shouldSwapOnlyOne = tokenA != reward && tokenB != reward;
-        uint rewardBal = IERC20(reward).balanceOf(address(this));
+        uint256 rewardBal = IERC20(reward).balanceOf(address(this));
         //Both tokens arent the reward we are getting,so swap reward to 50/50 ratio of rewards
-        if(!shouldSwapOnlyOne) {
-            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardBal / 2, 0, getTokenOutPath(reward,tokenA), address(this), block.timestamp);
-            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardBal / 2, 0, getTokenOutPath(reward,tokenB), address(this), block.timestamp);
-        }
-        else {
+        if (!shouldSwapOnlyOne) {
+            IUniswapV2Router02(router)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                rewardBal / 2,
+                0,
+                getTokenOutPath(reward, tokenA),
+                address(this),
+                block.timestamp
+            );
+            IUniswapV2Router02(router)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                rewardBal / 2,
+                0,
+                getTokenOutPath(reward, tokenB),
+                address(this),
+                block.timestamp
+            );
+        } else {
             address swapTo = findSwapTo(reward);
-            require(swapTo != address(0),"!SwapTo");
+            require(swapTo != address(0), "!SwapTo");
             //Call swap to get more of the of the swapTo token
-            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(rewardBal / 2, 0, getTokenOutPath(reward,swapTo), address(this), block.timestamp);
+            IUniswapV2Router02(router)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                rewardBal / 2,
+                0,
+                getTokenOutPath(reward, swapTo),
+                address(this),
+                block.timestamp
+            );
         }
     }
 
@@ -301,7 +331,7 @@ contract Joint {
         strategist = _strategist;
     }
 
-    function setKeeper(address _keeper) external onlyGovOrStrategist{
+    function setKeeper(address _keeper) external onlyGovOrStrategist {
         keeper = _keeper;
     }
 
