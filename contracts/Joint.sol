@@ -33,8 +33,8 @@ contract Joint {
     address public providerB;
     bool public reinvest;
 
-    address public gov;
-    address public pendingGov;
+    address public governance;
+    address public pendingGovernance;
     address public keeper;
     address public strategist;
     address public WETH;
@@ -44,12 +44,12 @@ contract Joint {
     IMasterchef public masterchef;
 
     modifier onlyGov {
-        require(msg.sender == gov);
+        require(msg.sender == governance);
         _;
     }
 
     modifier onlyGovOrStrategist {
-        require(msg.sender == gov || msg.sender == strategist);
+        require(msg.sender == governance || msg.sender == strategist);
         _;
     }
 
@@ -57,35 +57,49 @@ contract Joint {
         require(
             msg.sender == strategist ||
                 msg.sender == keeper ||
-                msg.sender == gov
+                msg.sender == governance
         );
         _;
     }
 
     constructor(
-        address _gov,
+        address _governance,
         address _keeper,
         address _strategist,
         address _tokenA,
         address _tokenB,
         address _router
     ) public {
-        _initialize(_gov, _keeper, _strategist, _tokenA, _tokenB, _router);
+        _initialize(
+            _governance,
+            _keeper,
+            _strategist,
+            _tokenA,
+            _tokenB,
+            _router
+        );
     }
 
     function initialize(
-        address _gov,
+        address _governance,
         address _keeper,
         address _strategist,
         address _tokenA,
         address _tokenB,
         address _router
     ) external {
-        _initialize(_gov, _keeper, _strategist, _tokenA, _tokenB, _router);
+        _initialize(
+            _governance,
+            _keeper,
+            _strategist,
+            _tokenA,
+            _tokenB,
+            _router
+        );
     }
 
     function _initialize(
-        address _gov,
+        address _governance,
         address _keeper,
         address _strategist,
         address _tokenA,
@@ -94,7 +108,7 @@ contract Joint {
     ) internal {
         require(address(tokenA) == address(0), "Joint already initialized");
 
-        gov = _gov;
+        governance = _governance;
         keeper = _keeper;
         strategist = _strategist;
         tokenA = _tokenA;
@@ -111,7 +125,7 @@ contract Joint {
     event Cloned(address indexed clone);
 
     function cloneJoint(
-        address _gov,
+        address _governance,
         address _keeper,
         address _strategist,
         address _tokenA,
@@ -136,7 +150,7 @@ contract Joint {
         }
 
         Joint(newJoint).initialize(
-            _gov,
+            _governance,
             _keeper,
             _strategist,
             _tokenA,
@@ -160,10 +174,15 @@ contract Joint {
     }
 
     function harvest() external onlyGuardians {
+        // IF tokenA or tokenB are rewards, we would be swapping all of it
+        // Let's save the previous balance before claiming
+        uint256 previousBalanceOfReward = balanceOfReward();
+
         // Gets the reward from the masterchef contract
         getReward();
-        if (balanceOfReward() > 0) {
-            swapReward();
+        uint256 rewardProfit = balanceOfReward().sub(previousBalanceOfReward);
+        if (rewardProfit > 0) {
+            swapReward(rewardProfit);
         }
 
         // No capital, nothing to do
@@ -240,14 +259,14 @@ contract Joint {
         if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
     }
 
-    function swapReward() internal {
+    function swapReward(uint256 _rewardBal) internal {
         bool shouldSwapOnlyOne = tokenA == reward || tokenB == reward;
-        uint256 rewardBal = IERC20(reward).balanceOf(address(this));
+
         //Both tokens arent the reward we are getting,so swap reward to 50/50 ratio of rewards
         if (!shouldSwapOnlyOne) {
             IUniswapV2Router02(router)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                rewardBal / 2,
+                _rewardBal.div(2),
                 0,
                 getTokenOutPath(reward, tokenA),
                 address(this),
@@ -255,7 +274,7 @@ contract Joint {
             );
             IUniswapV2Router02(router)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                rewardBal / 2,
+                _rewardBal.div(2),
                 0,
                 getTokenOutPath(reward, tokenB),
                 address(this),
@@ -266,7 +285,7 @@ contract Joint {
             //Call swap to get more of the of the swapTo token
             IUniswapV2Router02(router)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                rewardBal / 2,
+                _rewardBal.div(2),
                 0,
                 getTokenOutPath(reward, swapTo),
                 address(this),
@@ -353,13 +372,13 @@ contract Joint {
         keeper = _keeper;
     }
 
-    function setPendingGovernor(address _pendingGov) external onlyGov {
-        pendingGov = _pendingGov;
+    function setPendingGovernance(address _pendingGovernance) external onlyGov {
+        pendingGovernance = _pendingGovernance;
     }
 
     function acceptGovernor() external {
-        require(msg.sender == pendingGov);
-        gov = pendingGov;
-        pendingGov = address(0);
+        require(msg.sender == pendingGovernance);
+        governance = pendingGovernance;
+        pendingGovernance = address(0);
     }
 }
