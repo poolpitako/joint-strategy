@@ -2,11 +2,13 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import {
+    SafeERC20,
+    SafeMath,
+    IERC20,
+    Address
+} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {BaseStrategy} from "@yearnvaults/contracts/BaseStrategy.sol";
 
 interface IERC20Extended {
@@ -24,6 +26,7 @@ contract ProviderStrategy is BaseStrategy {
 
     address public joint;
     bool public takeProfit;
+    bool public investWant;
 
     constructor(address _vault, address _joint) public BaseStrategy(_vault) {
         _initializeStrat(_joint);
@@ -46,6 +49,8 @@ contract ProviderStrategy is BaseStrategy {
             "ProviderStrategy already initialized"
         );
         joint = _joint;
+        investWant = true;
+        takeProfit = false;
     }
 
     event Cloned(address indexed clone);
@@ -147,8 +152,8 @@ contract ProviderStrategy is BaseStrategy {
             return;
         }
 
-        // If we have to take profit, there is nothing to invest
-        if (takeProfit) {
+        // If we shouldn't invest, don't do it :D
+        if (!investWant) {
             return;
         }
 
@@ -172,7 +177,10 @@ contract ProviderStrategy is BaseStrategy {
         }
     }
 
-    function prepareMigration(address _newStrategy) internal override {}
+    function prepareMigration(address _newStrategy) internal override {
+        // Want is sent to the new strategy in the base class
+        // nothing to do here
+    }
 
     function protectedTokens()
         internal
@@ -191,5 +199,9 @@ contract ProviderStrategy is BaseStrategy {
 
     function setTakeProfit(bool _takeProfit) external onlyAuthorized {
         takeProfit = _takeProfit;
+    }
+
+    function setInvestWant(bool _investWant) external onlyAuthorized {
+        investWant = _investWant;
     }
 }

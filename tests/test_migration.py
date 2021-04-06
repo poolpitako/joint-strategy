@@ -3,7 +3,7 @@ import pytest
 from brownie import Contract, Wei
 
 
-def test_operation(
+def test_migration(
     chain,
     vaultA,
     vaultB,
@@ -16,6 +16,7 @@ def test_operation(
     strategist,
     tokenA_whale,
     tokenB_whale,
+    ProviderStrategy,
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
@@ -41,9 +42,19 @@ def test_operation(
     providerB.harvest({"from": strategist})
     assert joint.balanceOfA() * usd_amount > Wei("990 ether")
     assert joint.balanceOfB() * usd_amount > Wei("990 ether")
-
     joint.harvest({"from": strategist})
     assert joint.balanceOfStake() > 0
+
+    tx = providerA.cloneProviderStrategy(
+        providerA.vault(),
+        providerA.strategist(),
+        providerA.rewards(),
+        providerA.keeper(),
+        providerA.joint(),
+    )
+    new_a = ProviderStrategy.at(tx.events["Cloned"]["clone"])
+    vaultA.migrateStrategy(providerA, new_a, {"from": vaultA.governance()})
+    joint.setProviderA(new_a, {"from": gov})
 
     # Wait plz
     chain.sleep(60 * 60 * 24 * 5)
@@ -54,28 +65,28 @@ def test_operation(
     # If joint doesn't reinvest, and providers do not invest want, the want
     # will stay in the providers
     joint.setReinvest(False, {"from": strategist})
-    providerA.setInvestWant(False, {"from": strategist})
+    new_a.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
     joint.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
+    assert new_a.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
 
     # Harvest should be a no-op
-    providerA.harvest({"from": strategist})
+    new_a.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
     chain.sleep(60 * 60 * 8)
     chain.mine(1)
-    assert providerA.balanceOfWant() > 0
+    assert new_a.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
-    assert vaultA.strategies(providerA).dict()["totalGain"] == 0
+    assert vaultA.strategies(new_a).dict()["totalGain"] == 0
     assert vaultB.strategies(providerB).dict()["totalGain"] == 0
 
     # Liquidate position and make sure capital + profit is back
     joint.liquidatePosition({"from": strategist})
-    providerA.setTakeProfit(True, {"from": strategist})
+    new_a.setTakeProfit(True, {"from": strategist})
     providerB.setInvestWant(True, {"from": strategist})
     joint.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
+    assert new_a.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
-    assert vaultA.strategies(providerA).dict()["totalGain"] == 0
+    assert vaultA.strategies(new_a).dict()["totalGain"] == 0
     assert vaultB.strategies(providerB).dict()["totalGain"] == 0

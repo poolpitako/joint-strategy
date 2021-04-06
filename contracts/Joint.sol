@@ -2,14 +2,17 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import {
+    SafeERC20,
+    SafeMath,
+    IERC20,
+    Address
+} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
+import "../interfaces/IMasterChef.sol";
 
 interface IERC20Extended {
     function decimals() external view returns (uint8);
@@ -26,17 +29,38 @@ contract Joint {
 
     address public tokenA;
     address public providerA;
-
     address public tokenB;
     address public providerB;
-    address public router;
-
     bool public reinvest;
 
     address public gov;
     address public pendingGov;
     address public keeper;
     address public strategist;
+    address public WETH;
+    address public reward;
+    address public router;
+    uint256 public pid;
+    IMasterchef public masterchef;
+
+    modifier onlyGov {
+        require(msg.sender == gov);
+        _;
+    }
+
+    modifier onlyGovOrStrategist {
+        require(msg.sender == gov || msg.sender == strategist);
+        _;
+    }
+
+    modifier onlyGuardians {
+        require(
+            msg.sender == strategist ||
+                msg.sender == keeper ||
+                msg.sender == gov
+        );
+        _;
+    }
 
     constructor(
         address _gov,
@@ -76,7 +100,7 @@ contract Joint {
         tokenA = _tokenA;
         tokenB = _tokenB;
         router = _router;
-
+        pid = 1;
         reinvest = true;
 
         IERC20(tokenA).approve(address(router), type(uint256).max);
@@ -135,21 +159,22 @@ contract Joint {
         return string(abi.encodePacked("JointOf", ab));
     }
 
-    function harvest() external {
-        require(
-            msg.sender == strategist ||
-                msg.sender == keeper ||
-                msg.sender == gov
-        );
+    function harvest() external onlyGuardians {
+        // Gets the reward from the masterchef contract
+        getReward();
+        if (balanceOfReward() > 0) {
+            swapReward();
+        }
 
-        // TODO get reward
-        swapReward();
+        // No capital, nothing to do
+        if (balanceOfA() == 0 && balanceOfB() == 0) {
+            return;
+        }
 
         if (reinvest) {
             createLP();
-            // TODO invest the lp
+            depositLP();
         } else {
-            liquidatePosition();
             distributeProfit();
         }
     }
@@ -167,11 +192,91 @@ contract Joint {
         );
     }
 
-    function swapReward() internal {
-        // TODO: do the uni magic to convert reward into tokenA and tokenB
+    function setMasterChef(address _masterchef) external onlyGov {
+        masterchef = IMasterchef(_masterchef);
+        IERC20(getPair()).approve(_masterchef, type(uint256).max);
     }
 
-    function liquidatePosition() internal {
+    function setPid(uint256 _newPid) external onlyGov {
+        pid = _newPid;
+    }
+
+    function setWETH(address _weth) external onlyGov {
+        WETH = _weth;
+    }
+
+    function findSwapTo(address token) internal view returns (address) {
+        if (tokenA == token) {
+            return tokenB;
+        } else if (tokenB == token) {
+            return tokenA;
+        } else {
+            revert("!swapTo");
+        }
+    }
+
+    function getTokenOutPath(address _token_in, address _token_out)
+        internal
+        view
+        returns (address[] memory _path)
+    {
+        bool is_weth =
+            _token_in == address(WETH) || _token_out == address(WETH);
+        _path = new address[](is_weth ? 2 : 3);
+        _path[0] = _token_in;
+        if (is_weth) {
+            _path[1] = _token_out;
+        } else {
+            _path[1] = address(WETH);
+            _path[2] = _token_out;
+        }
+    }
+
+    function getReward() internal {
+        masterchef.deposit(pid, 0);
+    }
+
+    function depositLP() internal {
+        if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
+    }
+
+    function swapReward() internal {
+        bool shouldSwapOnlyOne = tokenA == reward || tokenB == reward;
+        uint256 rewardBal = IERC20(reward).balanceOf(address(this));
+        //Both tokens arent the reward we are getting,so swap reward to 50/50 ratio of rewards
+        if (!shouldSwapOnlyOne) {
+            IUniswapV2Router02(router)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                rewardBal / 2,
+                0,
+                getTokenOutPath(reward, tokenA),
+                address(this),
+                now
+            );
+            IUniswapV2Router02(router)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                rewardBal / 2,
+                0,
+                getTokenOutPath(reward, tokenB),
+                address(this),
+                now
+            );
+        } else {
+            address swapTo = findSwapTo(reward);
+            //Call swap to get more of the of the swapTo token
+            IUniswapV2Router02(router)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                rewardBal / 2,
+                0,
+                getTokenOutPath(reward, swapTo),
+                address(this),
+                now
+            );
+        }
+    }
+
+    function liquidatePosition() public onlyGuardians {
+        masterchef.withdraw(pid, balanceOfStake());
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
             tokenB,
@@ -212,33 +317,43 @@ contract Joint {
         return IERC20(tokenB).balanceOf(address(this));
     }
 
-    function setReinvest(bool _reinvest) external {
-        require(msg.sender == strategist || msg.sender == gov);
+    function balanceOfReward() public view returns (uint256) {
+        return IERC20(reward).balanceOf(address(this));
+    }
+
+    function balanceOfStake() public view returns (uint256) {
+        return masterchef.userInfo(pid, address(this)).amount;
+    }
+
+    function pendingReward() public view returns (uint256) {
+        return masterchef.pendingIce(pid, address(this));
+    }
+
+    function setReinvest(bool _reinvest) external onlyGovOrStrategist {
         reinvest = _reinvest;
     }
 
-    function setProviderA(address _providerA) external {
-        require(msg.sender == gov);
+    function setProviderA(address _providerA) external onlyGov {
         providerA = _providerA;
     }
 
-    function setProviderB(address _providerB) external {
-        require(msg.sender == gov);
+    function setProviderB(address _providerB) external onlyGov {
         providerB = _providerB;
     }
 
-    function setStrategist(address _strategist) external {
-        require(msg.sender == gov);
+    function setReward(address _reward) external onlyGov {
+        reward = _reward;
+    }
+
+    function setStrategist(address _strategist) external onlyGov {
         strategist = _strategist;
     }
 
-    function setKeeper(address _keeper) external {
-        require(msg.sender == gov);
+    function setKeeper(address _keeper) external onlyGovOrStrategist {
         keeper = _keeper;
     }
 
-    function setPendingGovernor(address _pendingGov) external {
-        require(msg.sender == gov);
+    function setPendingGovernor(address _pendingGov) external onlyGov {
         pendingGov = _pendingGov;
     }
 
