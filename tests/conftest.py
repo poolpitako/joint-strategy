@@ -33,6 +33,11 @@ def keeper(accounts):
 
 
 @pytest.fixture
+def attacker(accounts):
+    yield accounts[6]
+
+
+@pytest.fixture
 def tokenA(vaultA):
     yield Contract(vaultA.token())
 

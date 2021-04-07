@@ -84,9 +84,15 @@ def test_migration(
     # Liquidate position and make sure capital + profit is back
     joint.liquidatePosition({"from": strategist})
     new_a.setTakeProfit(True, {"from": strategist})
-    providerB.setInvestWant(True, {"from": strategist})
+    providerB.setTakeProfit(True, {"from": strategist})
+    new_a.setInvestWant(False, {"from": strategist})
+    providerB.setInvestWant(False, {"from": strategist})
+
     joint.harvest({"from": strategist})
     assert new_a.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
-    assert vaultA.strategies(new_a).dict()["totalGain"] == 0
-    assert vaultB.strategies(providerB).dict()["totalGain"] == 0
+
+    new_a.harvest({"from": strategist})
+    providerB.harvest({"from": strategist})
+    assert vaultA.strategies(new_a).dict()["totalGain"] > 0
+    assert vaultB.strategies(providerB).dict()["totalGain"] > 0

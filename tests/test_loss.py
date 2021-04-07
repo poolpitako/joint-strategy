@@ -1,9 +1,8 @@
-import brownie
 import pytest
 from brownie import Contract, Wei
 
 
-def test_operation(
+def test_loss(
     chain,
     vaultA,
     vaultB,
@@ -16,6 +15,7 @@ def test_operation(
     strategist,
     tokenA_whale,
     tokenB_whale,
+    attacker,
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
@@ -25,9 +25,9 @@ def test_operation(
     vaultB.deposit({"from": tokenB_whale})
 
     # https://www.coingecko.com/en/coins/fantom
-    tokenA_price = 0.45
+    tokenA_price = 0.438065
     # https://www.coingecko.com/en/coins/popsicle-finance
-    tokenB_price = 3.68
+    tokenB_price = 4.47
     usd_amount = Wei("1000 ether")
 
     vaultA.updateStrategyMaxDebtPerHarvest(
@@ -42,7 +42,6 @@ def test_operation(
     assert joint.balanceOfA() * usd_amount > Wei("990 ether")
     assert joint.balanceOfB() * usd_amount > Wei("990 ether")
 
-    print(f"Joint has {joint.balanceOfA()/1e18} wftm and {joint.balanceOfB()/1e18} ice")
     joint.harvest({"from": strategist})
     assert joint.balanceOfStake() > 0
 
@@ -52,47 +51,28 @@ def test_operation(
 
     # If there is any profit it should go to the providers
     assert joint.pendingReward() > 0
-    # If joint doesn't reinvest, and providers do not invest want, the want
-    # will stay in the providers
+
+    # There is a social attack and provider A was changed to the attacker!
+    joint.setProviderA(attacker, {"from": joint.governance()})
+
+    # Strategist liquidates the position and distribute profit
+    assert tokenA.balanceOf(attacker) == 0
     joint.setReinvest(False, {"from": strategist})
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
-    joint.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    # Harvest should be a no-op
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-    assert vaultA.strategies(providerA).dict()["totalGain"] == 0
-    assert vaultB.strategies(providerB).dict()["totalGain"] == 0
-
-    # Liquidate position and make sure capital + profit is back
     joint.liquidatePosition({"from": strategist})
-    print(
-        f"After liquidation, Joint has {joint.balanceOfA()/1e18} wftm and {joint.balanceOfB()/1e18} ice"
-    )
-    print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
-    print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
+    joint.harvest({"from": strategist})
+    assert tokenA.balanceOf(attacker) > 0
+    assert providerB.balanceOfWant() > 0
+    # Provider A was rugged
+    assert providerA.balanceOfWant() == 0
+
+    # Do the profit/loss accounting
     providerA.setTakeProfit(True, {"from": strategist})
     providerB.setTakeProfit(True, {"from": strategist})
     providerA.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
-
-    joint.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert vaultA.strategies(providerA).dict()["totalGain"] > 0
-    assert vaultB.strategies(providerB).dict()["totalGain"] > 0
 
-    print(f"wFTM profit: {vaultA.strategies(providerA).dict()['totalGain']/1e18} wftm")
-    print(f"ice profit: {vaultB.strategies(providerB).dict()['totalGain']/1e18} ice")
+    assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
+    assert vaultA.strategies(providerA).dict()["totalGain"] == 0
+    assert vaultB.strategies(providerB).dict()["totalGain"] > 0
