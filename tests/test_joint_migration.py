@@ -48,4 +48,3 @@ def test_join_migration(chain, accounts, Joint):
 
     # Invest capital
     new_joint.harvest({"from": gov})
-    assert 1 == 2
