@@ -109,10 +109,10 @@ def providerA(gov, strategist, keeper, vaultA, ProviderStrategy, joint):
     strategy = strategist.deploy(ProviderStrategy, vaultA, joint)
     strategy.setKeeper(keeper)
 
-    # Steal the debt ratio from strat0 before adding
-    strat_0 = Contract(vaultA.withdrawalQueue(0))
-    debt_ratio = vaultA.strategies(strat_0).dict()["debtRatio"]
-    vaultA.updateStrategyDebtRatio(strat_0, 0, {"from": vaultA.governance()})
+    # Steal the debt ratio from strat2 before adding
+    strat_2 = Contract(vaultA.withdrawalQueue(2))
+    debt_ratio = vaultA.strategies(strat_2).dict()["debtRatio"]
+    vaultA.updateStrategyDebtRatio(strat_2, 0, {"from": vaultA.governance()})
     vaultA.addStrategy(
         strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultA.governance()}
     )

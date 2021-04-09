@@ -41,6 +41,8 @@ contract Joint {
     address public reward;
     address public router;
     uint256 public pid;
+    uint256 public ratio = 500;
+    uint256 public constant MAX_RATIO = 1000;
     IMasterchef public masterchef;
 
     modifier onlyGov {
@@ -117,6 +119,13 @@ contract Joint {
         pid = 1;
         reinvest = true;
 
+        masterchef = IMasterchef(
+            address(0x05200cB2Cee4B6144B2B2984E246B52bB1afcBD0)
+        );
+        reward = address(0xf16e81dce15B08F326220742020379B855B87DF9);
+        WETH = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
+
+        IERC20(getPair()).approve(address(masterchef), type(uint256).max);
         IERC20(tokenA).approve(address(router), type(uint256).max);
         IERC20(tokenB).approve(address(router), type(uint256).max);
         IERC20(getPair()).approve(address(router), type(uint256).max);
@@ -260,38 +269,16 @@ contract Joint {
     }
 
     function swapReward(uint256 _rewardBal) internal {
-        bool shouldSwapOnlyOne = tokenA == reward || tokenB == reward;
-
-        //Both tokens arent the reward we are getting,so swap reward to 50/50 ratio of rewards
-        if (!shouldSwapOnlyOne) {
-            IUniswapV2Router02(router)
-                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                _rewardBal.div(2),
-                0,
-                getTokenOutPath(reward, tokenA),
-                address(this),
-                now
-            );
-            IUniswapV2Router02(router)
-                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                _rewardBal.div(2),
-                0,
-                getTokenOutPath(reward, tokenB),
-                address(this),
-                now
-            );
-        } else {
-            address swapTo = findSwapTo(reward);
-            //Call swap to get more of the of the swapTo token
-            IUniswapV2Router02(router)
-                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                _rewardBal.div(2),
-                0,
-                getTokenOutPath(reward, swapTo),
-                address(this),
-                now
-            );
-        }
+        address swapTo = findSwapTo(reward);
+        //Call swap to get more of the of the swapTo token
+        IUniswapV2Router02(router)
+            .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            _rewardBal.mul(ratio).div(MAX_RATIO),
+            0,
+            getTokenOutPath(reward, swapTo),
+            address(this),
+            now
+        );
     }
 
     function liquidatePosition() public onlyGuardians {
@@ -346,6 +333,11 @@ contract Joint {
 
     function pendingReward() public view returns (uint256) {
         return masterchef.pendingIce(pid, address(this));
+    }
+
+    function setRatio(uint256 _ratio) external onlyGovOrStrategist {
+        require(_ratio <= MAX_RATIO);
+        ratio = _ratio;
     }
 
     function setReinvest(bool _reinvest) external onlyGovOrStrategist {
