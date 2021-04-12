@@ -269,6 +269,11 @@ contract Joint {
     }
 
     function swapReward(uint256 _rewardBal) internal {
+        // We don't want to sell reward
+        if (ratio == 0) {
+            return;
+        }
+
         address swapTo = findSwapTo(reward);
         //Call swap to get more of the of the swapTo token
         IUniswapV2Router02(router)
@@ -276,6 +281,23 @@ contract Joint {
             _rewardBal.mul(ratio).div(MAX_RATIO),
             0,
             getTokenOutPath(reward, swapTo),
+            address(this),
+            now
+        );
+    }
+
+    // If there is a lot of impermanent loss, some capital will need to be sold
+    // To make both sides even
+    function sellCapital(
+        address _tokenFrom,
+        address _tokenTo,
+        uint256 _amount
+    ) public onlyGovOrStrategist {
+        IUniswapV2Router02(router)
+            .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            _amount,
+            0,
+            getTokenOutPath(_tokenFrom, _tokenTo),
             address(this),
             now
         );
