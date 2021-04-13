@@ -125,7 +125,6 @@ def providerA(gov, strategist, keeper, vaultA, ProviderStrategy, joint):
 @pytest.fixture
 def providerB(gov, strategist, keeper, vaultB, ProviderStrategy, joint):
     strategy = strategist.deploy(ProviderStrategy, vaultB, joint)
-    strategy.setKeeper(keeper)
 
     # Steal the debt ratio from strat0 before adding
     strat_0 = Contract(vaultB.withdrawalQueue(0))
