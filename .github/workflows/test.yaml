@@ -65,3 +65,4 @@ jobs:
         brownie test tests/test_migration.py --network ftm-main-fork
         brownie test tests/test_operation.py --network ftm-main-fork
         brownie test tests/test_loss.py --network ftm-main-fork
+        brownie test tests/test_join_migration2 --network ftm-main-fork
