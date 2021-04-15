@@ -43,7 +43,7 @@ def main():
     new_joint.sellCapital(
         new_joint.tokenA(),
         new_joint.tokenB(),
-        Wei("13_000 ether"),
+        Wei("4_862 ether"),
         {"from": gov, "gas_price": "1 gwei"},
     )
 
@@ -56,8 +56,46 @@ def main():
         f"available ICE after sell: {new_joint.balanceOfB()/1e18} with profit: {ice_profit}"
     )
 
-    # Invest capital
+    # Return money to providers
+    new_joint.setReinvest(False, {"from": gov, "gas_price": "1 gwei"})
     new_joint.harvest({"from": gov, "gas_price": "1 gwei"})
-    assert new_joint.balanceOfStake() > 0
-    print(f"available FTM after LP: {new_joint.balanceOfA()/1e18}")
-    print(f"available ICE after LP: {new_joint.balanceOfB()/1e18}")
+
+    # Providers state
+    vaultA = Contract(providerA.vault())
+    vaultB = Contract(providerB.vault())
+
+    profitA_before = vaultA.strategies(providerA).dict()["totalGain"]
+    profitB_before = vaultB.strategies(providerB).dict()["totalGain"]
+    lossA_before = vaultA.strategies(providerA).dict()["totalLoss"]
+    lossB_before = vaultB.strategies(providerB).dict()["totalLoss"]
+    ppsA_before = vaultA.pricePerShare()
+    ppsB_before = vaultB.pricePerShare()
+
+    providerA.setTakeProfit(True, {"from": gov, "gas_price": "1 gwei"})
+    providerB.setTakeProfit(True, {"from": gov, "gas_price": "1 gwei"})
+    providerA.setInvestWant(False, {"from": gov, "gas_price": "1 gwei"})
+    providerB.setInvestWant(False, {"from": gov, "gas_price": "1 gwei"})
+    vaultA.updateStrategyDebtRatio(providerA, 0, {"from": gov, "gas_price": "1 gwei"})
+    vaultB.updateStrategyDebtRatio(providerB, 0, {"from": gov, "gas_price": "1 gwei"})
+    providerA.harvest({"from": gov, "gas_price": "1 gwei"})
+    providerB.harvest({"from": gov, "gas_price": "1 gwei"})
+
+    chain.sleep(60 * 60 * 8)
+    chain.mine(1)
+    # Providers state
+    profitA_new = vaultA.strategies(providerA).dict()["totalGain"]
+    profitB_new = vaultB.strategies(providerB).dict()["totalGain"]
+    lossA_new = vaultA.strategies(providerA).dict()["totalLoss"]
+    lossB_new = vaultB.strategies(providerB).dict()["totalLoss"]
+    ppsA_new = vaultA.pricePerShare()
+    ppsB_new = vaultB.pricePerShare()
+
+    assert profitA_new - profitA_before > 0
+    assert profitB_new - profitB_before > 0
+    assert lossA_new - lossA_before == 0
+    assert lossB_new - lossB_before == 0
+    assert ppsA_new > ppsA_before
+    assert ppsB_new > ppsB_before
+
+    print(f"VaultA pps: {ppsA_new/1e18}, increase: {(ppsA_new-ppsA_before)/1e18}")
+    print(f"VaultB pps: {ppsB_new/1e18}, increase: {(ppsB_new-ppsB_before)/1e18}")
