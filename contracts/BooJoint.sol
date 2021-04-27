@@ -31,11 +31,9 @@ contract BooJoint {
     address public providerA;
     address public tokenB;
     address public providerB;
-    bool public reinvest;
 
     address public governance;
     address public pendingGovernance;
-    address public keeper;
     address public strategist;
     address public WETH;
     address public reward;
@@ -53,54 +51,18 @@ contract BooJoint {
         _;
     }
 
-    modifier onlyGuardians {
-        require(
-            msg.sender == strategist ||
-                msg.sender == keeper ||
-                msg.sender == governance
-        );
-        _;
-    }
-
     constructor(
         address _governance,
-        address _keeper,
         address _strategist,
         address _tokenA,
         address _tokenB,
         address _router
     ) public {
-        _initialize(
-            _governance,
-            _keeper,
-            _strategist,
-            _tokenA,
-            _tokenB,
-            _router
-        );
-    }
-
-    function initialize(
-        address _governance,
-        address _keeper,
-        address _strategist,
-        address _tokenA,
-        address _tokenB,
-        address _router
-    ) external {
-        _initialize(
-            _governance,
-            _keeper,
-            _strategist,
-            _tokenA,
-            _tokenB,
-            _router
-        );
+        _initialize(_governance, _strategist, _tokenA, _tokenB, _router);
     }
 
     function _initialize(
         address _governance,
-        address _keeper,
         address _strategist,
         address _tokenA,
         address _tokenB,
@@ -109,13 +71,11 @@ contract BooJoint {
         require(address(tokenA) == address(0), "Joint already initialized");
 
         governance = _governance;
-        keeper = _keeper;
         strategist = _strategist;
         tokenA = _tokenA;
         tokenB = _tokenB;
         router = _router;
         pid = 1;
-        reinvest = true;
 
         masterchef = IMasterchef(
             address(0x2b2929E785374c651a81A63878Ab22742656DcDd)
@@ -130,45 +90,6 @@ contract BooJoint {
         IERC20(getPair()).approve(address(router), type(uint256).max);
     }
 
-    event Cloned(address indexed clone);
-
-    function cloneJoint(
-        address _governance,
-        address _keeper,
-        address _strategist,
-        address _tokenA,
-        address _tokenB,
-        address _router
-    ) external returns (address newJoint) {
-        bytes20 addressBytes = bytes20(address(this));
-
-        assembly {
-            // EIP-1167 bytecode
-            let clone_code := mload(0x40)
-            mstore(
-                clone_code,
-                0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
-            )
-            mstore(add(clone_code, 0x14), addressBytes)
-            mstore(
-                add(clone_code, 0x28),
-                0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
-            )
-            newJoint := create(0, clone_code, 0x37)
-        }
-
-        BooJoint(newJoint).initialize(
-            _governance,
-            _keeper,
-            _strategist,
-            _tokenA,
-            _tokenB,
-            _router
-        );
-
-        emit Cloned(newJoint);
-    }
-
     function name() external view returns (string memory) {
         string memory ab =
             string(
@@ -178,21 +99,7 @@ contract BooJoint {
                 )
             );
 
-        return string(abi.encodePacked("JointOf", ab));
-    }
-
-    function harvest() external onlyGuardians {
-        // No capital, nothing to do
-        if (balanceOfA() == 0 && balanceOfB() == 0) {
-            return;
-        }
-
-        if (reinvest) {
-            createLP();
-            depositLP();
-        } else {
-            distributeProfit();
-        }
+        return string(abi.encodePacked("BooJointOf", ab));
     }
 
     function createLP() internal {
@@ -206,6 +113,61 @@ contract BooJoint {
             address(this),
             now
         );
+    }
+
+    function depositLP() internal {
+        if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
+    }
+
+    function getReward() external onlyGovOrStrategist {
+        masterchef.deposit(pid, 0);
+    }
+
+    function invest() external onlyGovOrStrategist {
+        createLP();
+        depositLP();
+    }
+
+    // If there is a lot of impermanent loss, some capital will need to be sold
+    // To make both sides even
+    function sellCapital(
+        address _tokenFrom,
+        address _tokenTo,
+        uint256 _amount
+    ) external onlyGovOrStrategist {
+        IUniswapV2Router02(router)
+            .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            _amount,
+            0,
+            getTokenOutPath(_tokenFrom, _tokenTo),
+            address(this),
+            now
+        );
+    }
+
+    function liquidatePosition() external onlyGovOrStrategist {
+        masterchef.withdraw(pid, balanceOfStake());
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
+    }
+
+    function distributeProfit() external onlyGovOrStrategist {
+        uint256 balanceA = balanceOfA();
+        if (balanceA > 0) {
+            IERC20(tokenA).transfer(providerA, balanceA);
+        }
+
+        uint256 balanceB = balanceOfB();
+        if (balanceB > 0) {
+            IERC20(tokenB).transfer(providerB, balanceB);
+        }
     }
 
     function setMasterChef(address _masterchef) external onlyGov {
@@ -238,52 +200,6 @@ contract BooJoint {
         }
     }
 
-    function depositLP() internal {
-        if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
-    }
-
-    // If there is a lot of impermanent loss, some capital will need to be sold
-    // To make both sides even
-    function sellCapital(
-        address _tokenFrom,
-        address _tokenTo,
-        uint256 _amount
-    ) public onlyGovOrStrategist {
-        IUniswapV2Router02(router)
-            .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            _amount,
-            0,
-            getTokenOutPath(_tokenFrom, _tokenTo),
-            address(this),
-            now
-        );
-    }
-
-    function liquidatePosition() public onlyGuardians {
-        masterchef.withdraw(pid, balanceOfStake());
-        IUniswapV2Router02(router).removeLiquidity(
-            tokenA,
-            tokenB,
-            balanceOfPair(),
-            0,
-            0,
-            address(this),
-            now
-        );
-    }
-
-    function distributeProfit() internal {
-        uint256 balanceA = balanceOfA();
-        if (balanceA > 0) {
-            IERC20(tokenA).transfer(providerA, balanceA);
-        }
-
-        uint256 balanceB = balanceOfB();
-        if (balanceB > 0) {
-            IERC20(tokenB).transfer(providerB, balanceB);
-        }
-    }
-
     function getPair() public view returns (address) {
         address factory = IUniswapV2Router02(router).factory();
         return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
@@ -313,10 +229,6 @@ contract BooJoint {
         return masterchef.pendingBOO(pid, address(this));
     }
 
-    function setReinvest(bool _reinvest) external onlyGovOrStrategist {
-        reinvest = _reinvest;
-    }
-
     function setProviderA(address _providerA) external onlyGov {
         providerA = _providerA;
     }
@@ -331,10 +243,6 @@ contract BooJoint {
 
     function setStrategist(address _strategist) external onlyGov {
         strategist = _strategist;
-    }
-
-    function setKeeper(address _keeper) external onlyGovOrStrategist {
-        keeper = _keeper;
     }
 
     function setPendingGovernance(address _pendingGovernance) external onlyGov {
