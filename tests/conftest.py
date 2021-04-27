@@ -88,6 +88,19 @@ def ice():
 
 
 @pytest.fixture
+def boo_joint(gov, keeper, strategist, BooJoint, wftm):
+    tokenA = wftm
+    tokenB = Contract("0x049d68029688eabf473097a2fc38ef61633a3c7a")
+    router = Contract("0xbe4fc72f8293f9d3512d58b969c98c3f676cb957")
+    joint = gov.deploy(BooJoint, gov, keeper, strategist, tokenA, tokenB, router)
+    mc = "0x2b2929E785374c651a81A63878Ab22742656DcDd"
+    joint.setMasterChef(mc, {"from": gov})
+    joint.setReward("0x841FAD6EAe12c286d1Fd18d1d525DFfA75C7EFFE", {"from": gov})
+    joint.setWETH(wftm, {"from": gov})
+    yield joint
+
+
+@pytest.fixture
 def joint(
     gov, keeper, strategist, tokenA, tokenB, Joint, router, ice_rewards, ice, wftm
 ):
