@@ -95,7 +95,9 @@ contract ProviderStrategy is BaseStrategy {
             string(
                 abi.encodePacked(
                     "ProviderOf",
-                    IERC20Extended(address(want)).symbol()
+                    IERC20Extended(address(want)).symbol(),
+                    "To",
+                    IERC20Extended(address(joint)).name()
                 )
             );
     }
@@ -193,7 +195,7 @@ contract ProviderStrategy is BaseStrategy {
         return IERC20(want).balanceOf(address(this));
     }
 
-    function setJoint(address _joint) external onlyAuthorized {
+    function setJoint(address _joint) external onlyGovernance {
         joint = _joint;
     }
 
