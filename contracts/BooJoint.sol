@@ -22,7 +22,7 @@ interface IERC20Extended {
     function symbol() external view returns (string memory);
 }
 
-contract BooJointWftmBoo {
+contract BooJoint {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -229,7 +229,7 @@ contract BooJointWftmBoo {
     }
 
     function pendingReward() public view returns (uint256) {
-        return masterchef.pendingCake(pid, address(this));
+        return masterchef.pendingBoo(pid, address(this));
     }
 
     function setProviderA(address _providerA) external onlyGov {
