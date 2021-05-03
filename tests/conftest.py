@@ -88,6 +88,34 @@ def ice():
 
 
 @pytest.fixture
+def pancake_swap():
+    yield Contract("0x10ED43C718714eb63d5aA57B78B54704E256024E")
+
+
+@pytest.fixture
+def wbnb():
+    yield Contract("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c")
+
+
+@pytest.fixture
+def binance_eth():
+    yield Contract("0x2170Ed0880ac9A755fd29B2688956BD959F933F8")
+
+
+@pytest.fixture
+def binance_eth():
+    yield Contract("0x2170Ed0880ac9A755fd29B2688956BD959F933F8")
+
+
+@pytest.fixture
+def cake_joint(gov, strategist, CakeJoint, wbnb, binance_eth, pancake_swap):
+    tokenA = wbnb
+    tokenB = binance_eth
+    joint = gov.deploy(CakeJoint, gov, strategist, tokenA, tokenB, pancake_swap, 261)
+    yield joint
+
+
+@pytest.fixture
 def boo_joint(gov, keeper, strategist, BooJoint, wftm):
     tokenA = wftm
     tokenB = Contract("0x049d68029688eabf473097a2fc38ef61633a3c7a")
