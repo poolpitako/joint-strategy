@@ -229,7 +229,7 @@ contract BooJoint {
     }
 
     function pendingReward() public view returns (uint256) {
-        return masterchef.pendingBoo(pid, address(this));
+        return masterchef.pendingBOO(pid, address(this));
     }
 
     function setProviderA(address _providerA) external onlyGov {
