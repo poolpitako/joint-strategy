@@ -56,9 +56,10 @@ contract BooJoint {
         address _strategist,
         address _tokenA,
         address _tokenB,
-        address _router
+        address _router,
+        uint256 _pid
     ) public {
-        _initialize(_governance, _strategist, _tokenA, _tokenB, _router);
+        _initialize(_governance, _strategist, _tokenA, _tokenB, _router, _pid);
     }
 
     function _initialize(
@@ -66,7 +67,8 @@ contract BooJoint {
         address _strategist,
         address _tokenA,
         address _tokenB,
-        address _router
+        address _router,
+        uint256 _pid
     ) internal {
         require(address(tokenA) == address(0), "Joint already initialized");
 
@@ -75,11 +77,12 @@ contract BooJoint {
         tokenA = _tokenA;
         tokenB = _tokenB;
         router = _router;
-        pid = 1;
+        pid = _pid;
 
         masterchef = IMasterchef(
             address(0x2b2929E785374c651a81A63878Ab22742656DcDd)
         );
+
         reward = address(0x841FAD6EAe12c286d1Fd18d1d525DFfA75C7EFFE);
         WETH = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
 
