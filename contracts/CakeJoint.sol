@@ -105,7 +105,7 @@ contract CakeJoint {
                 )
             );
 
-        return string(abi.encodePacked("BooJointOf", ab));
+        return string(abi.encodePacked("JointOf", ab));
     }
 
     function createLP() internal {
