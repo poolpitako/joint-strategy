@@ -228,6 +228,33 @@ contract MiniChefJoint {
         return IERC20(reward).balanceOf(address(this));
     }
 
+    function extraRewardsTokens()
+        public
+        view
+        returns (IERC20[] memory _extraRewards)
+    {
+        (_extraRewards, ) = minichef.rewarder(pid).pendingTokens(
+            pid,
+            address(this),
+            0
+        );
+    }
+
+    function balanceOfExtraRewards()
+        public
+        view
+        returns (uint256[] memory _extraRewardsBalances)
+    {
+        (IERC20[] memory extraRewards, ) =
+            minichef.rewarder(pid).pendingTokens(pid, address(this), 0);
+
+        _extraRewardsBalances = new uint256[](extraRewards.length);
+
+        for (uint256 i = 0; i < extraRewards.length; i++) {
+            _extraRewardsBalances[i] = extraRewards[i].balanceOf(address(this));
+        }
+    }
+
     function balanceOfStake() public view returns (uint256) {
         return minichef.userInfo(pid, address(this)).amount;
     }
