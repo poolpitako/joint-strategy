@@ -91,6 +91,15 @@ contract MiniChefJoint {
         IERC20(tokenB).approve(address(router), type(uint256).max);
         IERC20(reward).approve(address(router), type(uint256).max);
         IERC20(getPair()).approve(address(router), type(uint256).max);
+
+        IERC20[] memory extraRewardsTokens = extraRewardsTokens();
+        for (uint256 i = 0; i < extraRewardsTokens.length; i++) {
+            if (
+                tokenA == address(extraRewardsTokens[i]) ||
+                tokenB == address(extraRewardsTokens[i])
+            ) continue;
+            extraRewardsTokens[i].approve(address(router), type(uint256).max);
+        }
     }
 
     function name() external view returns (string memory) {
