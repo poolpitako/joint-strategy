@@ -28,19 +28,4 @@ interface IMasterchef {
         external
         view
         returns (uint256);
-
-    function pendingIce(uint256 _pid, address _user)
-        external
-        view
-        returns (uint256);
-
-    function pendingBOO(uint256 _pid, address _user)
-        external
-        view
-        returns (uint256);
-
-    function pendingCake(uint256 _pid, address _user)
-        external
-        view
-        returns (uint256);
 }

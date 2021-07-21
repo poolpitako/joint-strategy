@@ -22,99 +22,96 @@ interface IERC20Extended {
     function symbol() external view returns (string memory);
 }
 
+interface ProviderStrategy {
+    function governance() external view returns (address);
+
+    function strategist() external view returns (address);
+
+    function keeper() external view returns (address);
+
+    function want() external view returns (address);
+}
+
 contract Joint {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
+    ProviderStrategy public providerA;
     address public tokenA;
-    address public providerA;
+    ProviderStrategy public providerB;
     address public tokenB;
-    address public providerB;
+
     bool public reinvest;
 
-    address public governance;
-    address public pendingGovernance;
-    address public keeper;
-    address public strategist;
     address public WETH;
     address public reward;
     address public router;
+
     uint256 public pid;
     uint256 public ratio = 500;
     uint256 public constant MAX_RATIO = 1000;
+
     IMasterchef public masterchef;
 
-    modifier onlyGov {
-        require(msg.sender == governance);
-        _;
-    }
-
-    modifier onlyGovOrStrategist {
-        require(msg.sender == governance || msg.sender == strategist);
-        _;
-    }
-
-    modifier onlyGuardians {
+    modifier onlyGovernance {
         require(
-            msg.sender == strategist ||
-                msg.sender == keeper ||
-                msg.sender == governance
+            msg.sender == providerA.governance() ||
+                msg.sender == providerB.governance()
+        );
+        _;
+    }
+
+    modifier onlyAuthorized {
+        require(
+            msg.sender == providerA.governance() ||
+                msg.sender == providerB.governance() ||
+                msg.sender == providerA.strategist() ||
+                msg.sender == providerB.strategist()
+        );
+        _;
+    }
+
+    modifier onlyKeepers {
+        require(
+            msg.sender == providerA.governance() ||
+                msg.sender == providerB.governance() ||
+                msg.sender == providerA.strategist() ||
+                msg.sender == providerB.strategist() ||
+                msg.sender == providerA.keeper() ||
+                msg.sender == providerB.keeper()
         );
         _;
     }
 
     constructor(
-        address _governance,
-        address _keeper,
-        address _strategist,
-        address _tokenA,
-        address _tokenB,
+        address _providerA,
+        address _providerB,
         address _router
     ) public {
-        _initialize(
-            _governance,
-            _keeper,
-            _strategist,
-            _tokenA,
-            _tokenB,
-            _router
-        );
+        _initialize(_providerA, _providerB, _router);
     }
 
     function initialize(
-        address _governance,
-        address _keeper,
-        address _strategist,
-        address _tokenA,
-        address _tokenB,
+        address _providerA,
+        address _providerB,
         address _router
     ) external {
-        _initialize(
-            _governance,
-            _keeper,
-            _strategist,
-            _tokenA,
-            _tokenB,
-            _router
-        );
+        _initialize(_providerA, _providerB, _router);
     }
 
     function _initialize(
-        address _governance,
-        address _keeper,
-        address _strategist,
-        address _tokenA,
-        address _tokenB,
+        address _providerA,
+        address _providerB,
         address _router
     ) internal {
         require(address(tokenA) == address(0), "Joint already initialized");
 
-        governance = _governance;
-        keeper = _keeper;
-        strategist = _strategist;
-        tokenA = _tokenA;
-        tokenB = _tokenB;
+        providerA = ProviderStrategy(_providerA);
+        providerB = ProviderStrategy(_providerB);
+
+        tokenA = providerA.want();
+        tokenB = providerB.want();
         router = _router;
         pid = 1;
         reinvest = true;
@@ -134,11 +131,8 @@ contract Joint {
     event Cloned(address indexed clone);
 
     function cloneJoint(
-        address _governance,
-        address _keeper,
-        address _strategist,
-        address _tokenA,
-        address _tokenB,
+        address _providerA,
+        address _providerB,
         address _router
     ) external returns (address newJoint) {
         bytes20 addressBytes = bytes20(address(this));
@@ -158,14 +152,7 @@ contract Joint {
             newJoint := create(0, clone_code, 0x37)
         }
 
-        Joint(newJoint).initialize(
-            _governance,
-            _keeper,
-            _strategist,
-            _tokenA,
-            _tokenB,
-            _router
-        );
+        Joint(newJoint).initialize(_providerA, _providerB, _router);
 
         emit Cloned(newJoint);
     }
@@ -182,7 +169,7 @@ contract Joint {
         return string(abi.encodePacked("JointOf", ab));
     }
 
-    function harvest() external onlyGuardians {
+    function harvest() external onlyKeepers {
         // IF tokenA or tokenB are rewards, we would be swapping all of it
         // Let's save the previous balance before claiming
         uint256 previousBalanceOfReward = balanceOfReward();
@@ -220,16 +207,16 @@ contract Joint {
         );
     }
 
-    function setMasterChef(address _masterchef) external onlyGov {
+    function setMasterChef(address _masterchef) external onlyGovernance {
         masterchef = IMasterchef(_masterchef);
         IERC20(getPair()).approve(_masterchef, type(uint256).max);
     }
 
-    function setPid(uint256 _newPid) external onlyGov {
+    function setPid(uint256 _newPid) external onlyGovernance {
         pid = _newPid;
     }
 
-    function setWETH(address _weth) external onlyGov {
+    function setWETH(address _weth) external onlyGovernance {
         WETH = _weth;
     }
 
@@ -292,7 +279,7 @@ contract Joint {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amount
-    ) public onlyGovOrStrategist {
+    ) public onlyAuthorized {
         IUniswapV2Router02(router)
             .swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amount,
@@ -303,7 +290,7 @@ contract Joint {
         );
     }
 
-    function liquidatePosition() public onlyGuardians {
+    function liquidatePosition() public onlyKeepers {
         masterchef.withdraw(pid, balanceOfStake());
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
@@ -319,12 +306,12 @@ contract Joint {
     function distributeProfit() internal {
         uint256 balanceA = balanceOfA();
         if (balanceA > 0) {
-            IERC20(tokenA).transfer(providerA, balanceA);
+            IERC20(tokenA).transfer(address(providerA), balanceA);
         }
 
         uint256 balanceB = balanceOfB();
         if (balanceB > 0) {
-            IERC20(tokenB).transfer(providerB, balanceB);
+            IERC20(tokenB).transfer(address(providerB), balanceB);
         }
     }
 
@@ -354,45 +341,29 @@ contract Joint {
     }
 
     function pendingReward() public view returns (uint256) {
-        return masterchef.pendingIce(pid, address(this));
+        return masterchef.pendingSushi(pid, address(this));
     }
 
-    function setRatio(uint256 _ratio) external onlyGovOrStrategist {
+    function setRatio(uint256 _ratio) external onlyAuthorized {
         require(_ratio <= MAX_RATIO);
         ratio = _ratio;
     }
 
-    function setReinvest(bool _reinvest) external onlyGovOrStrategist {
+    function setReinvest(bool _reinvest) external onlyAuthorized {
         reinvest = _reinvest;
     }
 
-    function setProviderA(address _providerA) external onlyGov {
-        providerA = _providerA;
+    function setProviderA(address _providerA) external onlyGovernance {
+        providerA = ProviderStrategy(_providerA);
+        require(providerA.want() == tokenA);
     }
 
-    function setProviderB(address _providerB) external onlyGov {
-        providerB = _providerB;
+    function setProviderB(address _providerB) external onlyGovernance {
+        providerB = ProviderStrategy(_providerB);
+        require(providerB.want() == tokenB);
     }
 
-    function setReward(address _reward) external onlyGov {
+    function setReward(address _reward) external onlyGovernance {
         reward = _reward;
-    }
-
-    function setStrategist(address _strategist) external onlyGov {
-        strategist = _strategist;
-    }
-
-    function setKeeper(address _keeper) external onlyGovOrStrategist {
-        keeper = _keeper;
-    }
-
-    function setPendingGovernance(address _pendingGovernance) external onlyGov {
-        pendingGovernance = _pendingGovernance;
-    }
-
-    function acceptGovernor() external {
-        require(msg.sender == pendingGovernance);
-        governance = pendingGovernance;
-        pendingGovernance = address(0);
     }
 }

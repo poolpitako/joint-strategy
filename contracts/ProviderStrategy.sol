@@ -206,4 +206,24 @@ contract ProviderStrategy is BaseStrategy {
     function setInvestWant(bool _investWant) external onlyAuthorized {
         investWant = _investWant;
     }
+
+    function liquidateAllPositions()
+        internal
+        virtual
+        override
+        returns (uint256 _amountFreed)
+    {
+        return _amountFreed;
+    }
+
+    function ethToWant(uint256 _amtInWei)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        // TODO create an accurate price oracle
+        return _amtInWei;
+    }
 }
