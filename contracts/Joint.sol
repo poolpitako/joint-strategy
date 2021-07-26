@@ -12,7 +12,13 @@ import "@openzeppelin/contracts/math/Math.sol";
 
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
+import "../interfaces/uni/IUniswapV2Pair.sol";
 import "../interfaces/IMasterChef.sol";
+
+import {
+    StrategyParams,
+    VaultAPI
+} from "@yearnvaults/contracts/BaseStrategy.sol";
 
 interface IERC20Extended {
     function decimals() external view returns (uint8);
@@ -23,6 +29,8 @@ interface IERC20Extended {
 }
 
 interface ProviderStrategy {
+    function vault() external view returns (VaultAPI);
+
     function governance() external view returns (address);
 
     function strategist() external view returns (address);
@@ -54,6 +62,8 @@ contract Joint {
 
     IMasterchef public masterchef;
 
+    IUniswapV2Pair internal pair;
+
     modifier onlyGovernance {
         require(
             msg.sender == providerA.governance() ||
@@ -80,6 +90,13 @@ contract Joint {
                 msg.sender == providerB.strategist() ||
                 msg.sender == providerA.keeper() ||
                 msg.sender == providerB.keeper()
+        );
+        _;
+    }
+
+    modifier onlyProviders {
+        require(
+            msg.sender == address(providerA) || msg.sender == address(providerB)
         );
         _;
     }
@@ -122,10 +139,12 @@ contract Joint {
         reward = address(0xf16e81dce15B08F326220742020379B855B87DF9);
         WETH = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
 
-        IERC20(getPair()).approve(address(masterchef), type(uint256).max);
+        pair = IUniswapV2Pair(getPair());
+
+        IERC20(address(pair)).approve(address(masterchef), type(uint256).max);
         IERC20(tokenA).approve(address(router), type(uint256).max);
         IERC20(tokenB).approve(address(router), type(uint256).max);
-        IERC20(getPair()).approve(address(router), type(uint256).max);
+        IERC20(address(pair)).approve(address(router), type(uint256).max);
     }
 
     event Cloned(address indexed clone);
@@ -169,6 +188,20 @@ contract Joint {
         return string(abi.encodePacked("JointOf", ab));
     }
 
+    function estimatedTotalAssetsInToken(address token)
+        external
+        view
+        returns (uint256)
+    {
+        require(token == tokenA || token == tokenB);
+
+        uint256 balanceOfToken = token == tokenA ? balanceOfA() : balanceOfB();
+
+        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
+
+        return 0; //balanceOfToken.add(reserve);
+    }
+
     function harvest() external onlyKeepers {
         // IF tokenA or tokenB are rewards, we would be swapping all of it
         // Let's save the previous balance before claiming
@@ -191,6 +224,73 @@ contract Joint {
             depositLP();
         } else {
             distributeProfit();
+        }
+    }
+
+    function calculateTokenToSell() internal view returns (address, uint256) {
+        uint256 totalDebtA =
+            providerA.vault().strategies(address(providerA)).totalDebt;
+        uint256 totalDebtB =
+            providerA.vault().strategies(address(providerB)).totalDebt;
+
+        //(uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
+        return (address(0), 0);
+    }
+
+    function calculateSellToBalance(uint256 currentA, uint256 currentB)
+        internal
+        view
+        returns (address _sellToken, uint256 _sellAmount)
+    {
+        uint256 totalDebtA =
+            providerA.vault().strategies(address(providerA)).totalDebt;
+        uint256 totalDebtB =
+            providerA.vault().strategies(address(providerB)).totalDebt;
+        uint256 percentReturnA = balanceOfA().mul(1e4).div(totalDebtA);
+        uint256 percentReturnB = balanceOfB().mul(1e4).div(totalDebtB);
+
+        if (percentReturnA == percentReturnB) return (address(0), 0);
+
+        (uint256 _AForB, uint256 _BForA) = getSpotExchangeRates();
+
+        uint256 numerator;
+        uint256 denominator;
+        if (percentReturnA > percentReturnB) {
+            _sellToken = tokenA;
+            numerator = balanceOfA().sub(
+                totalDebtA.mul(balanceOfB()).div(totalDebtB)
+            );
+            denominator = 1 + balanceOfA().mul(_BForA).div(totalDebtB);
+        } else {
+            _sellToken = tokenB;
+            numerator = balanceOfB().sub(
+                totalDebtB.mul(balanceOfA()).div(totalDebtA)
+            );
+            denominator = 1 + balanceOfB().mul(_AForB).div(totalDebtA);
+        }
+        _sellAmount = numerator.div(denominator);
+    }
+
+    function getSpotExchangeRates()
+        internal
+        view
+        returns (uint256 _AForB, uint256 _BForA)
+    {
+        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
+        uint256 _0For1 =
+            reserve0.mul(10**IERC20Extended(pair.token0()).decimals()).div(
+                reserve1
+            );
+        uint256 _1For0 =
+            reserve1.mul(10**IERC20Extended(pair.token1()).decimals()).div(
+                reserve0
+            );
+        if (pair.token0() == tokenA) {
+            _AForB = _0For1;
+            _BForA = _1For0;
+        } else {
+            _BForA = _0For1;
+            _AForB = _1For0;
         }
     }
 
