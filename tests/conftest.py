@@ -3,9 +3,8 @@ from brownie import config, Contract
 
 
 @pytest.fixture
-def gov(accounts):
-    yield accounts[0]
-
+def gov(accounts, vaultA):
+    yield accounts.at(vaultA.governance(), force=True)
 
 @pytest.fixture
 def rewards(accounts):
@@ -44,137 +43,80 @@ def tokenA(vaultA):
 
 @pytest.fixture
 def vaultA():
-    # WFTM vault
-    yield Contract("0x36e7aF39b921235c4b01508BE38F27A535851a5c")
+    # WETH vault
+    yield Contract("0xa258C4606Ca8206D8aA700cE2143D7db854D168c")
 
 
 @pytest.fixture
-def wftm():
-    # WFTM token
-    yield Contract("0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83")
-
+def vaultB():
+    # YFI vault
+    yield Contract("0xE14d13d8B3b85aF791b2AADD661cDBd5E6097Db1")
 
 @pytest.fixture
 def tokenA_whale(accounts):
-    yield accounts.at("0xbb634cafef389cdd03bb276c82738726079fcf2e", force=True)
+    yield accounts.at("0x2F0b23f53734252Bda2277357e97e1517d6B042A", force=True)
 
 
 @pytest.fixture
 def tokenB_whale(accounts):
-    yield accounts.at("0x05200cb2cee4b6144b2b2984e246b52bb1afcbd0", force=True)
+    yield accounts.at("0x3ff33d9162aD47660083D7DC4bC02Fb231c81677", force=True)
 
 
 @pytest.fixture
 def tokenB(vaultB):
     yield Contract(vaultB.token())
 
+@pytest.fixture
+def weth():
+    yield Contract("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2")
 
 @pytest.fixture
-def vaultB():
-    # ICE vault
-    yield Contract("0xEea0714eC1af3b0D41C624Ba5ce09aC92F4062b1")
-
+def masterchef():
+    yield Contract("0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd")
 
 @pytest.fixture
-def ice_rewards():
-    # ICE masterchef
-    yield Contract("0x05200cb2cee4b6144b2b2984e246b52bb1afcbd0")
-
-
-@pytest.fixture
-def ice():
-    # ICE token
-    yield Contract("0xf16e81dce15b08f326220742020379b855b87df9")
-
-
-@pytest.fixture
-def pancake_swap():
-    yield Contract("0x10ED43C718714eb63d5aA57B78B54704E256024E")
-
-
-@pytest.fixture
-def wbnb():
-    yield Contract("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c")
-
-
-@pytest.fixture
-def binance_eth():
-    yield Contract("0x2170Ed0880ac9A755fd29B2688956BD959F933F8")
-
-
-@pytest.fixture
-def binance_eth():
-    yield Contract("0x2170Ed0880ac9A755fd29B2688956BD959F933F8")
-
-
-@pytest.fixture
-def cake_joint(gov, strategist, CakeJoint, wbnb, binance_eth, pancake_swap):
-    tokenA = wbnb
-    tokenB = binance_eth
-    joint = gov.deploy(CakeJoint, gov, strategist, tokenA, tokenB, pancake_swap, 261)
-    yield joint
-
-
-@pytest.fixture
-def boo_joint(gov, keeper, strategist, BooJoint, wftm):
-    tokenA = wftm
-    tokenB = Contract("0x049d68029688eabf473097a2fc38ef61633a3c7a")
-    router = Contract("0xbe4fc72f8293f9d3512d58b969c98c3f676cb957")
-    joint = gov.deploy(BooJoint, gov, keeper, strategist, tokenA, tokenB, router)
-    mc = "0x2b2929E785374c651a81A63878Ab22742656DcDd"
-    joint.setMasterChef(mc, {"from": gov})
-    joint.setReward("0x841FAD6EAe12c286d1Fd18d1d525DFfA75C7EFFE", {"from": gov})
-    joint.setWETH(wftm, {"from": gov})
-    yield joint
-
+def sushi():
+    yield Contract("0x6B3595068778DD592e39A122f4f5a5cF09C90fE2")
 
 @pytest.fixture
 def joint(
-    gov, keeper, strategist, tokenA, tokenB, Joint, router, ice_rewards, ice, wftm
+    gov, providerA, providerB, Joint, router, masterchef, sushi, weth
 ):
-    joint = gov.deploy(Joint, gov, keeper, strategist, tokenA, tokenB, router)
-    joint.setMasterChef(ice_rewards, {"from": gov})
-    joint.setReward(ice, {"from": gov})
-    joint.setWETH(wftm, {"from": gov})
+    joint = gov.deploy(Joint, providerA, providerB, router)
+    joint.setMasterChef(masterchef, {"from": gov})
+    joint.setReward(sushi, {"from": gov})
+    joint.setWETH(weth, {"from": gov})
+
+    providerA.setJoint(joint, {"from": gov})
+    providerB.setJoint(joint, {"from": gov})
+
     yield joint
 
 
 @pytest.fixture
 def router():
-    # Sushi in FTM
-    yield Contract("0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506")
+    # Sushi 
+    yield Contract("0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F")
 
 
 @pytest.fixture
-def providerA(gov, strategist, keeper, vaultA, ProviderStrategy, joint):
-    strategy = strategist.deploy(ProviderStrategy, vaultA, joint)
+def providerA(gov, strategist, keeper, vaultA, ProviderStrategy):
+    strategy = strategist.deploy(ProviderStrategy, vaultA)
     strategy.setKeeper(keeper)
 
-    # Steal the debt ratio from strat2 before adding
-    strat_2 = Contract(vaultA.withdrawalQueue(2))
-    debt_ratio = vaultA.strategies(strat_2).dict()["debtRatio"]
-    vaultA.updateStrategyDebtRatio(strat_2, 0, {"from": vaultA.governance()})
     vaultA.addStrategy(
-        strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultA.governance()}
+        strategy, 2000, 0, 2 ** 256 - 1, 1_000, {"from": gov}
     )
-
-    joint.setProviderA(strategy, {"from": gov})
 
     yield strategy
 
 
 @pytest.fixture
-def providerB(gov, strategist, keeper, vaultB, ProviderStrategy, joint):
-    strategy = strategist.deploy(ProviderStrategy, vaultB, joint)
+def providerB(gov, strategist, vaultB, ProviderStrategy):
+    strategy = strategist.deploy(ProviderStrategy, vaultB)
 
-    # Steal the debt ratio from strat0 before adding
-    strat_0 = Contract(vaultB.withdrawalQueue(0))
-    debt_ratio = vaultB.strategies(strat_0).dict()["debtRatio"]
-    vaultB.updateStrategyDebtRatio(strat_0, 0, {"from": vaultB.governance()})
     vaultB.addStrategy(
-        strategy, debt_ratio, 0, 2 ** 256 - 1, 1_000, {"from": vaultB.governance()}
+        strategy, 2000, 0, 2 ** 256 - 1, 1_000, {"from": gov}
     )
-
-    joint.setProviderB(strategy, {"from": gov})
 
     yield strategy

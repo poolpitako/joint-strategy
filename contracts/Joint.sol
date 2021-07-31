@@ -31,8 +31,6 @@ interface IERC20Extended {
 interface ProviderStrategy {
     function vault() external view returns (VaultAPI);
 
-    function governance() external view returns (address);
-
     function strategist() external view returns (address);
 
     function keeper() external view returns (address);
@@ -62,20 +60,20 @@ contract Joint {
 
     IMasterchef public masterchef;
 
-    IUniswapV2Pair internal pair;
+    IUniswapV2Pair public pair;
 
     modifier onlyGovernance {
         require(
-            msg.sender == providerA.governance() ||
-                msg.sender == providerB.governance()
+            msg.sender == providerA.vault().governance() ||
+                msg.sender == providerB.vault().governance()
         );
         _;
     }
 
     modifier onlyAuthorized {
         require(
-            msg.sender == providerA.governance() ||
-                msg.sender == providerB.governance() ||
+            msg.sender == providerA.vault().governance() ||
+                msg.sender == providerB.vault().governance() ||
                 msg.sender == providerA.strategist() ||
                 msg.sender == providerB.strategist()
         );
@@ -84,8 +82,8 @@ contract Joint {
 
     modifier onlyKeepers {
         require(
-            msg.sender == providerA.governance() ||
-                msg.sender == providerB.governance() ||
+            msg.sender == providerA.vault().governance() ||
+                msg.sender == providerB.vault().governance() ||
                 msg.sender == providerA.strategist() ||
                 msg.sender == providerB.strategist() ||
                 msg.sender == providerA.keeper() ||
@@ -122,28 +120,28 @@ contract Joint {
         address _providerB,
         address _router
     ) internal {
-        require(address(tokenA) == address(0), "Joint already initialized");
-
+        require(address(providerA) == address(0), "Joint already initialized");
         providerA = ProviderStrategy(_providerA);
         providerB = ProviderStrategy(_providerB);
 
         tokenA = providerA.want();
         tokenB = providerB.want();
         router = _router;
-        pid = 1;
+        pid = 11;
         reinvest = true;
 
         masterchef = IMasterchef(
-            address(0x05200cB2Cee4B6144B2B2984E246B52bB1afcBD0)
+            address(0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd)
         );
-        reward = address(0xf16e81dce15B08F326220742020379B855B87DF9);
-        WETH = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
+        reward = address(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2);
+        WETH = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
         pair = IUniswapV2Pair(getPair());
 
         IERC20(address(pair)).approve(address(masterchef), type(uint256).max);
         IERC20(tokenA).approve(address(router), type(uint256).max);
         IERC20(tokenB).approve(address(router), type(uint256).max);
+        IERC20(reward).approve(address(router), type(uint256).max);
         IERC20(address(pair)).approve(address(router), type(uint256).max);
     }
 
@@ -202,39 +200,35 @@ contract Joint {
         return 0; //balanceOfToken.add(reserve);
     }
 
-    function harvest() external onlyKeepers {
+    function prepareReturn() external onlyProviders {
         // IF tokenA or tokenB are rewards, we would be swapping all of it
         // Let's save the previous balance before claiming
         uint256 previousBalanceOfReward = balanceOfReward();
 
         // Gets the reward from the masterchef contract
-        getReward();
+        if (balanceOfStake() > 0) {
+            getReward();
+        }
         uint256 rewardProfit = balanceOfReward().sub(previousBalanceOfReward);
         if (rewardProfit > 0) {
             swapReward(rewardProfit);
         }
 
+        liquidatePosition();
+
+        distributeProfit();
+    }
+
+    function adjustPosition() external onlyProviders {
         // No capital, nothing to do
-        if (balanceOfA() == 0 && balanceOfB() == 0) {
+        if (balanceOfA() == 0 || balanceOfB() == 0) {
             return;
         }
 
         if (reinvest) {
             createLP();
             depositLP();
-        } else {
-            distributeProfit();
         }
-    }
-
-    function calculateTokenToSell() internal view returns (address, uint256) {
-        uint256 totalDebtA =
-            providerA.vault().strategies(address(providerA)).totalDebt;
-        uint256 totalDebtB =
-            providerA.vault().strategies(address(providerB)).totalDebt;
-
-        //(uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        return (address(0), 0);
     }
 
     function calculateSellToBalance(uint256 currentA, uint256 currentB)
@@ -278,11 +272,11 @@ contract Joint {
     {
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
         uint256 _0For1 =
-            reserve0.mul(10**IERC20Extended(pair.token0()).decimals()).div(
+            reserve0.mul(10**IERC20Extended(pair.token1()).decimals()).div(
                 reserve1
             );
         uint256 _1For0 =
-            reserve1.mul(10**IERC20Extended(pair.token1()).decimals()).div(
+            reserve1.mul(10**IERC20Extended(pair.token0()).decimals()).div(
                 reserve0
             );
         if (pair.token0() == tokenA) {
@@ -324,6 +318,8 @@ contract Joint {
         if (tokenA == token) {
             return tokenB;
         } else if (tokenB == token) {
+            return tokenA;
+        } else if (reward == token) {
             return tokenA;
         } else {
             revert("!swapTo");
@@ -390,17 +386,21 @@ contract Joint {
         );
     }
 
-    function liquidatePosition() public onlyKeepers {
-        masterchef.withdraw(pid, balanceOfStake());
-        IUniswapV2Router02(router).removeLiquidity(
-            tokenA,
-            tokenB,
-            balanceOfPair(),
-            0,
-            0,
-            address(this),
-            now
-        );
+    function liquidatePosition() internal {
+        if (balanceOfStake() > 0) {
+            masterchef.withdraw(pid, balanceOfStake());
+        }
+        if (balanceOfPair() > 0) {
+            IUniswapV2Router02(router).removeLiquidity(
+                tokenA,
+                tokenB,
+                balanceOfPair(),
+                0,
+                0,
+                address(this),
+                now
+            );
+        }
     }
 
     function distributeProfit() internal {
@@ -415,7 +415,7 @@ contract Joint {
         }
     }
 
-    function getPair() public view returns (address) {
+    function getPair() internal view returns (address) {
         address factory = IUniswapV2Router02(router).factory();
         return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
     }

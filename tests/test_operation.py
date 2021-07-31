@@ -24,26 +24,11 @@ def test_operation(
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
     vaultB.deposit({"from": tokenB_whale})
 
-    # https://www.coingecko.com/en/coins/fantom
-    tokenA_price = 0.45
-    # https://www.coingecko.com/en/coins/popsicle-finance
-    tokenB_price = 3.68
-    usd_amount = Wei("1000 ether")
-
-    vaultA.updateStrategyMaxDebtPerHarvest(
-        providerA, usd_amount // tokenA_price, {"from": vaultA.governance()}
-    )
-    vaultB.updateStrategyMaxDebtPerHarvest(
-        providerB, usd_amount // tokenB_price, {"from": vaultB.governance()}
-    )
-
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() * usd_amount > Wei("990 ether")
-    assert joint.balanceOfB() * usd_amount > Wei("990 ether")
+    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
 
-    print(f"Joint has {joint.balanceOfA()/1e18} wftm and {joint.balanceOfB()/1e18} ice")
-    joint.harvest({"from": strategist})
+    print(f"Joint has {joint.balanceOfA()/1e18} YFI and {joint.balanceOfB()/1e18} Eth")
     assert joint.balanceOfStake() > 0
 
     # Wait plz
@@ -57,7 +42,8 @@ def test_operation(
     joint.setReinvest(False, {"from": strategist})
     providerA.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
-    joint.harvest({"from": strategist})
+    providerA.harvest({"from": strategist})
+    providerB.harvest({"from": strategist})
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
 

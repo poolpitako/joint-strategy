@@ -19,6 +19,12 @@ interface IERC20Extended {
     function symbol() external view returns (string memory);
 }
 
+interface JointAPI {
+    function prepareReturn() external;
+
+    function adjustPosition() external;
+}
+
 contract ProviderStrategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -28,27 +34,25 @@ contract ProviderStrategy is BaseStrategy {
     bool public takeProfit;
     bool public investWant;
 
-    constructor(address _vault, address _joint) public BaseStrategy(_vault) {
-        _initializeStrat(_joint);
+    constructor(address _vault) public BaseStrategy(_vault) {
+        _initializeStrat();
     }
 
     function initialize(
         address _vault,
         address _strategist,
         address _rewards,
-        address _keeper,
-        address _joint
+        address _keeper
     ) external {
         _initialize(_vault, _strategist, _rewards, _keeper);
-        _initializeStrat(_joint);
+        _initializeStrat();
     }
 
-    function _initializeStrat(address _joint) internal {
+    function _initializeStrat() internal {
         require(
             address(joint) == address(0),
             "ProviderStrategy already initialized"
         );
-        joint = _joint;
         investWant = true;
         takeProfit = false;
     }
@@ -59,8 +63,7 @@ contract ProviderStrategy is BaseStrategy {
         address _vault,
         address _strategist,
         address _rewards,
-        address _keeper,
-        address _joint
+        address _keeper
     ) external returns (address newStrategy) {
         bytes20 addressBytes = bytes20(address(this));
 
@@ -83,8 +86,7 @@ contract ProviderStrategy is BaseStrategy {
             _vault,
             _strategist,
             _rewards,
-            _keeper,
-            _joint
+            _keeper
         );
 
         emit Cloned(newStrategy);
@@ -115,6 +117,8 @@ contract ProviderStrategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
+        JointAPI(joint).prepareReturn();
+
         // if we are not taking profit, there is nothing to do
         if (!takeProfit) {
             return (0, 0, 0);
@@ -122,7 +126,6 @@ contract ProviderStrategy is BaseStrategy {
 
         // If we reach this point, it means that we are winding down
         // and we will take profit / losses or pay back debt
-
         uint256 debt = vault.strategies(address(this)).totalDebt;
         uint256 wantBalance = balanceOfWant();
 
@@ -163,6 +166,7 @@ contract ProviderStrategy is BaseStrategy {
         if (wantBalance > 0) {
             want.transfer(joint, wantBalance);
         }
+        JointAPI(joint).adjustPosition();
     }
 
     function liquidatePosition(uint256 _amountNeeded)
