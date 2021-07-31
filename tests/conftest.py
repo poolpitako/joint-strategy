@@ -86,6 +86,7 @@ def joint(
     joint.setMasterChef(masterchef, {"from": gov})
     joint.setReward(sushi, {"from": gov})
     joint.setWETH(weth, {"from": gov})
+    joint.setPid(11, {"from": gov})
 
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})

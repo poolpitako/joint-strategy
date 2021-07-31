@@ -44,8 +44,9 @@ contract Joint {
     using SafeMath for uint256;
 
     ProviderStrategy public providerA;
-    address public tokenA;
     ProviderStrategy public providerB;
+
+    address public tokenA;
     address public tokenB;
 
     bool public reinvest;
@@ -55,12 +56,13 @@ contract Joint {
     address public router;
 
     uint256 public pid;
-    uint256 public ratio = 500;
-    uint256 public constant MAX_RATIO = 1000;
 
     IMasterchef public masterchef;
 
     IUniswapV2Pair public pair;
+
+    uint256 private investedA;
+    uint256 private investedB;
 
     modifier onlyGovernance {
         require(
@@ -127,7 +129,6 @@ contract Joint {
         tokenA = providerA.want();
         tokenB = providerB.want();
         router = _router;
-        pid = 11;
         reinvest = true;
 
         masterchef = IMasterchef(
@@ -206,17 +207,44 @@ contract Joint {
         uint256 previousBalanceOfReward = balanceOfReward();
 
         // Gets the reward from the masterchef contract
-        if (balanceOfStake() > 0) {
+        if (balanceOfStake() != 0) {
             getReward();
         }
         uint256 rewardProfit = balanceOfReward().sub(previousBalanceOfReward);
-        if (rewardProfit > 0) {
-            swapReward(rewardProfit);
+
+        address rewardSwappedTo;
+        uint256 rewardSwapAmount;
+        if (rewardProfit != 0) {
+            (rewardSwappedTo, rewardSwapAmount) = swapReward(rewardProfit);
         }
 
-        liquidatePosition();
+        uint256 _investedA = investedA;
+        uint256 _investedB = investedB;
+        (uint256 aLiquidated, uint256 bLiquidated) = liquidatePosition();
+        investedA = investedB = 0;
 
-        distributeProfit();
+        if (!reinvest) {
+            (address sellToken, uint256 sellAmount) =
+                calculateSellToBalance(
+                    aLiquidated.add(
+                        rewardSwappedTo == tokenA ? rewardSwapAmount : 0
+                    ),
+                    bLiquidated.add(
+                        rewardSwappedTo == tokenB ? rewardSwapAmount : 0
+                    ),
+                    investedA,
+                    investedB
+                );
+            if (sellToken != address(0) && sellAmount != 0) {
+                sellCapital(
+                    sellToken,
+                    sellToken == tokenA ? tokenB : tokenA,
+                    sellAmount
+                );
+            }
+
+            distributeProfit();
+        }
     }
 
     function adjustPosition() external onlyProviders {
@@ -226,22 +254,21 @@ contract Joint {
         }
 
         if (reinvest) {
-            createLP();
+            (investedA, investedB, ) = createLP();
             depositLP();
         }
     }
 
-    function calculateSellToBalance(uint256 currentA, uint256 currentB)
-        internal
-        view
-        returns (address _sellToken, uint256 _sellAmount)
-    {
-        uint256 totalDebtA =
-            providerA.vault().strategies(address(providerA)).totalDebt;
-        uint256 totalDebtB =
-            providerA.vault().strategies(address(providerB)).totalDebt;
-        uint256 percentReturnA = balanceOfA().mul(1e4).div(totalDebtA);
-        uint256 percentReturnB = balanceOfB().mul(1e4).div(totalDebtB);
+    function calculateSellToBalance(
+        uint256 currentA,
+        uint256 currentB,
+        uint256 startingA,
+        uint256 startingB
+    ) internal view returns (address _sellToken, uint256 _sellAmount) {
+        if (startingA == 0 || startingB == 0) return (address(0), 0);
+
+        uint256 percentReturnA = currentA.mul(1e4).div(startingA);
+        uint256 percentReturnB = currentB.mul(1e4).div(startingB);
 
         if (percentReturnA == percentReturnB) return (address(0), 0);
 
@@ -251,16 +278,12 @@ contract Joint {
         uint256 denominator;
         if (percentReturnA > percentReturnB) {
             _sellToken = tokenA;
-            numerator = balanceOfA().sub(
-                totalDebtA.mul(balanceOfB()).div(totalDebtB)
-            );
-            denominator = 1 + balanceOfA().mul(_BForA).div(totalDebtB);
+            numerator = currentA.sub(startingA.mul(currentB).div(startingB));
+            denominator = 1 + startingA.mul(_BForA).div(startingB);
         } else {
             _sellToken = tokenB;
-            numerator = balanceOfB().sub(
-                totalDebtB.mul(balanceOfA()).div(totalDebtA)
-            );
-            denominator = 1 + balanceOfB().mul(_AForB).div(totalDebtA);
+            numerator = currentB.sub(startingB.mul(currentA).div(startingA));
+            denominator = 1 + startingB.mul(_AForB).div(startingA);
         }
         _sellAmount = numerator.div(denominator);
     }
@@ -288,17 +311,25 @@ contract Joint {
         }
     }
 
-    function createLP() internal {
-        IUniswapV2Router02(router).addLiquidity(
-            tokenA,
-            tokenB,
-            balanceOfA(),
-            balanceOfB(),
-            0,
-            0,
-            address(this),
-            now
-        );
+    function createLP()
+        internal
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        return
+            IUniswapV2Router02(router).addLiquidity(
+                tokenA,
+                tokenB,
+                balanceOfA(),
+                balanceOfB(),
+                0,
+                0,
+                address(this),
+                now
+            );
     }
 
     function setMasterChef(address _masterchef) external onlyGovernance {
@@ -320,6 +351,9 @@ contract Joint {
         } else if (tokenB == token) {
             return tokenA;
         } else if (reward == token) {
+            if (tokenA == WETH || tokenB == WETH) {
+                return WETH;
+            }
             return tokenA;
         } else {
             revert("!swapTo");
@@ -351,22 +385,21 @@ contract Joint {
         if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
     }
 
-    function swapReward(uint256 _rewardBal) internal {
-        // We don't want to sell reward
-        if (ratio == 0) {
-            return;
-        }
-
-        address swapTo = findSwapTo(reward);
+    function swapReward(uint256 _rewardBal)
+        internal
+        returns (address _swapTo, uint256 _receivedAmount)
+    {
+        _swapTo = findSwapTo(reward);
         //Call swap to get more of the of the swapTo token
-        IUniswapV2Router02(router)
-            .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            _rewardBal.mul(ratio).div(MAX_RATIO),
-            0,
-            getTokenOutPath(reward, swapTo),
-            address(this),
-            now
-        );
+        uint256[] memory amounts =
+            IUniswapV2Router02(router).swapExactTokensForTokens(
+                _rewardBal,
+                0,
+                getTokenOutPath(reward, _swapTo),
+                address(this),
+                now
+            );
+        _receivedAmount = amounts[amounts.length - 1];
     }
 
     // If there is a lot of impermanent loss, some capital will need to be sold
@@ -375,9 +408,8 @@ contract Joint {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amount
-    ) public onlyAuthorized {
-        IUniswapV2Router02(router)
-            .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+    ) internal {
+        IUniswapV2Router02(router).swapExactTokensForTokens(
             _amount,
             0,
             getTokenOutPath(_tokenFrom, _tokenTo),
@@ -386,11 +418,14 @@ contract Joint {
         );
     }
 
-    function liquidatePosition() internal {
-        if (balanceOfStake() > 0) {
+    function liquidatePosition() internal returns (uint256, uint256) {
+        if (balanceOfStake() != 0) {
             masterchef.withdraw(pid, balanceOfStake());
         }
-        if (balanceOfPair() > 0) {
+        if (balanceOfPair() == 0) {
+            return (0, 0);
+        }
+        return
             IUniswapV2Router02(router).removeLiquidity(
                 tokenA,
                 tokenB,
@@ -400,7 +435,6 @@ contract Joint {
                 address(this),
                 now
             );
-        }
     }
 
     function distributeProfit() internal {
@@ -442,11 +476,6 @@ contract Joint {
 
     function pendingReward() public view returns (uint256) {
         return masterchef.pendingSushi(pid, address(this));
-    }
-
-    function setRatio(uint256 _ratio) external onlyAuthorized {
-        require(_ratio <= MAX_RATIO);
-        ratio = _ratio;
     }
 
     function setReinvest(bool _reinvest) external onlyAuthorized {
