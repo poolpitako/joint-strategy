@@ -1,6 +1,9 @@
 import pytest
 from brownie import config, Contract
 
+@pytest.fixture(autouse=True)
+def isolation(fn_isolation):
+    pass
 
 @pytest.fixture
 def gov(accounts, vaultA):

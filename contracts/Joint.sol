@@ -232,8 +232,8 @@ contract Joint {
                     bLiquidated.add(
                         rewardSwappedTo == tokenB ? rewardSwapAmount : 0
                     ),
-                    investedA,
-                    investedB
+                    _investedA,
+                    _investedB
                 );
             if (sellToken != address(0) && sellAmount != 0) {
                 sellCapital(
@@ -259,18 +259,33 @@ contract Joint {
         }
     }
 
+    event PnL(uint256 tokenA, uint256 tokenB);
+    event SellToBalance(address sellToken, uint256 sellAmount);
+
     function calculateSellToBalance(
         uint256 currentA,
         uint256 currentB,
         uint256 startingA,
         uint256 startingB
-    ) internal view returns (address _sellToken, uint256 _sellAmount) {
+    ) internal returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
         uint256 percentReturnA = currentA.mul(1e4).div(startingA);
         uint256 percentReturnB = currentB.mul(1e4).div(startingB);
 
+        // If returns are equal, nothing to sell
         if (percentReturnA == percentReturnB) return (address(0), 0);
+
+        emit PnL(percentReturnA, percentReturnB);
+
+        // If one earned a return and the other didn't, swap
+        if (percentReturnA > 1e4 && percentReturnB == 1e4) {
+            return (tokenA, currentA.sub(startingA).div(2));
+        }       // half the gain
+        if (percentReturnA == 1e4 && percentReturnB > 1e4) {
+            return (tokenB, currentB.sub(startingB).div(2));
+        }
+
 
         (uint256 _AForB, uint256 _BForA) = getSpotExchangeRates();
 
@@ -286,6 +301,7 @@ contract Joint {
             denominator = 1 + startingB.mul(_AForB).div(startingA);
         }
         _sellAmount = numerator.div(denominator);
+        emit SellToBalance(_sellToken, _sellAmount);
     }
 
     function getSpotExchangeRates()
