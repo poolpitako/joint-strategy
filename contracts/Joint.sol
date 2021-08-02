@@ -224,23 +224,41 @@ contract Joint {
         investedA = investedB = 0;
 
         if (!reinvest) {
+            uint256 currentA =
+                aLiquidated.add(
+                    rewardSwappedTo == tokenA ? rewardSwapAmount : 0
+                );
+            uint256 currentB =
+                bLiquidated.add(
+                    rewardSwappedTo == tokenB ? rewardSwapAmount : 0
+                );
+
             (address sellToken, uint256 sellAmount) =
                 calculateSellToBalance(
-                    aLiquidated.add(
-                        rewardSwappedTo == tokenA ? rewardSwapAmount : 0
-                    ),
-                    bLiquidated.add(
-                        rewardSwappedTo == tokenB ? rewardSwapAmount : 0
-                    ),
+                    currentA,
+                    currentB,
                     _investedA,
                     _investedB
                 );
             if (sellToken != address(0) && sellAmount != 0) {
-                sellCapital(
-                    sellToken,
-                    sellToken == tokenA ? tokenB : tokenA,
-                    sellAmount
-                );
+                uint256 amountOut =
+                    sellCapital(
+                        sellToken,
+                        sellToken == tokenA ? tokenB : tokenA,
+                        sellAmount
+                    );
+
+                if (sellToken == tokenA) {
+                    currentA = currentA.sub(sellAmount);
+                    currentB = currentB.add(amountOut);
+                } else {
+                    currentB = currentB.sub(sellAmount);
+                    currentA = currentA.add(amountOut);
+                }
+
+                (uint256 aPnL, uint256 bPnL) =
+                    getPnL(currentA, currentB, _investedA, _investedB);
+                emit PnL(aPnL, bPnL);
             }
 
             distributeProfit();
@@ -270,22 +288,13 @@ contract Joint {
     ) internal returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
-        uint256 percentReturnA = currentA.mul(1e4).div(startingA);
-        uint256 percentReturnB = currentB.mul(1e4).div(startingB);
+        (uint256 percentReturnA, uint256 percentReturnB) =
+            getPnL(currentA, currentB, startingA, startingB);
 
         // If returns are equal, nothing to sell
         if (percentReturnA == percentReturnB) return (address(0), 0);
 
         emit PnL(percentReturnA, percentReturnB);
-
-        // If one earned a return and the other didn't, swap
-        if (percentReturnA > 1e4 && percentReturnB == 1e4) {
-            return (tokenA, currentA.sub(startingA).div(2));
-        }       // half the gain
-        if (percentReturnA == 1e4 && percentReturnB > 1e4) {
-            return (tokenB, currentB.sub(startingB).div(2));
-        }
-
 
         (uint256 _AForB, uint256 _BForA) = getSpotExchangeRates();
 
@@ -294,30 +303,34 @@ contract Joint {
         if (percentReturnA > percentReturnB) {
             _sellToken = tokenA;
             numerator = currentA.sub(startingA.mul(currentB).div(startingB));
-            denominator = 1 + startingA.mul(_BForA).div(startingB);
+            denominator = 1e18 + startingA.mul(_BForA).div(startingB);
         } else {
             _sellToken = tokenB;
             numerator = currentB.sub(startingB.mul(currentA).div(startingA));
-            denominator = 1 + startingB.mul(_AForB).div(startingA);
+            denominator = 1e18 + startingB.mul(_AForB).div(startingA);
         }
-        _sellAmount = numerator.div(denominator);
+        _sellAmount = numerator.mul(1e18).div(denominator);
         emit SellToBalance(_sellToken, _sellAmount);
     }
 
+    function getPnL(
+        uint256 currentA,
+        uint256 currentB,
+        uint256 startingA,
+        uint256 startingB
+    ) internal pure returns (uint256 _a, uint256 _b) {
+        _a = currentA.mul(1e4).div(startingA);
+        _b = currentB.mul(1e4).div(startingB);
+    }
+
     function getSpotExchangeRates()
-        internal
+        public
         view
         returns (uint256 _AForB, uint256 _BForA)
     {
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        uint256 _0For1 =
-            reserve0.mul(10**IERC20Extended(pair.token1()).decimals()).div(
-                reserve1
-            );
-        uint256 _1For0 =
-            reserve1.mul(10**IERC20Extended(pair.token0()).decimals()).div(
-                reserve0
-            );
+        uint256 _0For1 = reserve0.mul(1e18).div(reserve1);
+        uint256 _1For0 = reserve1.mul(1e18).div(reserve0);
         if (pair.token0() == tokenA) {
             _AForB = _0For1;
             _BForA = _1For0;
@@ -423,15 +436,17 @@ contract Joint {
     function sellCapital(
         address _tokenFrom,
         address _tokenTo,
-        uint256 _amount
-    ) internal {
-        IUniswapV2Router02(router).swapExactTokensForTokens(
-            _amount,
-            0,
-            getTokenOutPath(_tokenFrom, _tokenTo),
-            address(this),
-            now
-        );
+        uint256 _amountIn
+    ) internal returns (uint256 _amountOut) {
+        uint256[] memory amounts =
+            IUniswapV2Router02(router).swapExactTokensForTokens(
+                _amountIn,
+                0,
+                getTokenOutPath(_tokenFrom, _tokenTo),
+                address(this),
+                now
+            );
+        _amountOut = amounts[amounts.length - 1];
     }
 
     function liquidatePosition() internal returns (uint256, uint256) {

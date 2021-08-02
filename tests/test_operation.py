@@ -19,10 +19,10 @@ def test_operation(
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(10*1e18, {"from": tokenA_whale})
+    vaultA.deposit(10 * 1e18, {"from": tokenA_whale})
 
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(150*1e18, {"from": tokenB_whale})
+    vaultB.deposit(150 * 1e18, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
@@ -44,8 +44,10 @@ def test_operation(
     providerB.setInvestWant(False, {"from": strategist})
     providerA.setTakeProfit(True, {"from": strategist})
     providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
+    tx = providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
+    pnl_events = tx.events["PnL"]
+    print(f"{pnl_events}")
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalGain"] > 0
@@ -87,10 +89,10 @@ def test_operation_swap_a4b(
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(10*1e18, {"from": tokenA_whale})
+    vaultA.deposit(10 * 1e18, {"from": tokenA_whale})
 
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(150*1e18, {"from": tokenB_whale})
+    vaultB.deposit(150 * 1e18, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
@@ -99,14 +101,14 @@ def test_operation_swap_a4b(
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
 
-    tokenA.approve(router, 2**256 -1, {"from": tokenA_whale})
+    tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     router.swapExactTokensForTokens(
         tokenA.balanceOf(tokenA_whale),
         0,
         [tokenA, tokenB],
         tokenA_whale,
-        2**256-1,   
-        {"from": tokenA_whale}
+        2 ** 256 - 1,
+        {"from": tokenA_whale},
     )
 
     # Wait plz
@@ -122,8 +124,10 @@ def test_operation_swap_a4b(
     providerB.setInvestWant(False, {"from": strategist})
     providerA.setTakeProfit(True, {"from": strategist})
     providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
+    tx = providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
+    pnl_events = tx.events["PnL"]
+    print(f"{pnl_events}")
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
@@ -131,8 +135,8 @@ def test_operation_swap_a4b(
 
     print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
     print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
-    print(f"eth profit: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} eth")
-    print(f"yfi profit: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} yfi")
+    print(f"eth loss: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} eth")
+    print(f"yfi loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} yfi")
 
 
 def test_operation_swap_b4a(
@@ -151,10 +155,10 @@ def test_operation_swap_b4a(
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(10*1e18, {"from": tokenA_whale})
+    vaultA.deposit(10 * 1e18, {"from": tokenA_whale})
 
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(150*1e18, {"from": tokenB_whale})
+    vaultB.deposit(150 * 1e18, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
@@ -163,14 +167,14 @@ def test_operation_swap_b4a(
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
 
-    tokenB.approve(router, 2**256 -1, {"from": tokenB_whale})
+    tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
     router.swapExactTokensForTokens(
-        tokenB.balanceOf(tokenB_whale),
+        1500 * 1e18,
         0,
         [tokenB, tokenA],
         tokenB_whale,
-        2**256-1,   
-        {"from": tokenB_whale}
+        2 ** 256 - 1,
+        {"from": tokenB_whale},
     )
 
     # Wait plz
@@ -186,8 +190,10 @@ def test_operation_swap_b4a(
     providerB.setInvestWant(False, {"from": strategist})
     providerA.setTakeProfit(True, {"from": strategist})
     providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
+    tx = providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
+    pnl_events = tx.events["PnL"]
+    print(f"{pnl_events}")
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
@@ -195,5 +201,5 @@ def test_operation_swap_b4a(
 
     print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
     print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
-    print(f"eth profit: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} eth")
-    print(f"yfi profit: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} yfi")
+    print(f"eth loss: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} eth")
+    print(f"yfi loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} yfi")
