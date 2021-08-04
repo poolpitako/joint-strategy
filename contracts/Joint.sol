@@ -205,7 +205,8 @@ contract Joint {
 
         return string(abi.encodePacked("JointOf", ab));
     }
-
+    
+    /*
     function estimatedTotalAssetsInToken(address token)
         external
         view
@@ -219,6 +220,7 @@ contract Joint {
 
         return 0; //balanceOfToken.add(reserve);
     }
+    */
 
     function prepareReturn() external onlyProviders {
         // IF tokenA or tokenB are rewards, we would be swapping all of it
