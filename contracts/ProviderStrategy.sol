@@ -49,10 +49,6 @@ contract ProviderStrategy is BaseStrategy {
     }
 
     function _initializeStrat() internal {
-        require(
-            address(joint) == address(0),
-            "ProviderStrategy already initialized"
-        );
         investWant = true;
         takeProfit = false;
     }

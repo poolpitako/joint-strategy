@@ -103,10 +103,19 @@ contract Joint {
         address _providerB,
         address _router,
         address _weth,
+        address _masterchef,
         address _reward,
         uint256 _pid
     ) public {
-        _initialize(_providerA, _providerB, _router, _weth, _reward, _pid);
+        _initialize(
+            _providerA,
+            _providerB,
+            _router,
+            _weth,
+            _masterchef,
+            _reward,
+            _pid
+        );
     }
 
     function initialize(
@@ -114,10 +123,19 @@ contract Joint {
         address _providerB,
         address _router,
         address _weth,
+        address _masterchef,
         address _reward,
         uint256 _pid
     ) external {
-        _initialize(_providerA, _providerB, _router, _weth, _reward, _pid);
+        _initialize(
+            _providerA,
+            _providerB,
+            _router,
+            _weth,
+            _masterchef,
+            _reward,
+            _pid
+        );
     }
 
     function _initialize(
@@ -125,6 +143,7 @@ contract Joint {
         address _providerB,
         address _router,
         address _weth,
+        address _masterchef,
         address _reward,
         uint256 _pid
     ) internal {
@@ -133,6 +152,7 @@ contract Joint {
         providerB = ProviderStrategy(_providerB);
         router = _router;
         WETH = _weth;
+        masterchef = IMasterchef(_masterchef);
         reward = _reward;
         pid = _pid;
 
@@ -140,9 +160,6 @@ contract Joint {
         tokenB = providerB.want();
         reinvest = true;
 
-        masterchef = IMasterchef(
-            address(0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd)
-        );
         reward = address(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2);
         WETH = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
@@ -162,6 +179,7 @@ contract Joint {
         address _providerB,
         address _router,
         address _weth,
+        address _masterchef,
         address _reward,
         uint256 _pid
     ) external returns (address newJoint) {
@@ -186,6 +204,7 @@ contract Joint {
             _providerA,
             _providerB,
             _router,
+            _masterchef,
             _weth,
             _reward,
             _pid
@@ -205,7 +224,7 @@ contract Joint {
 
         return string(abi.encodePacked("JointOf", ab));
     }
-    
+
     /*
     function estimatedTotalAssetsInToken(address token)
         external
@@ -223,21 +242,13 @@ contract Joint {
     */
 
     function prepareReturn() external onlyProviders {
-        // IF tokenA or tokenB are rewards, we would be swapping all of it
-        // Let's save the previous balance before claiming
-        uint256 previousBalanceOfReward = balanceOfReward();
-
         // Gets the reward from the masterchef contract
         if (balanceOfStake() != 0) {
             getReward();
         }
-        uint256 rewardProfit = balanceOfReward().sub(previousBalanceOfReward);
 
-        address rewardSwappedTo;
-        uint256 rewardSwapAmount;
-        if (rewardProfit != 0) {
-            (rewardSwappedTo, rewardSwapAmount) = swapReward(rewardProfit);
-        }
+        (address rewardSwappedTo, uint256 rewardSwapAmount) =
+            swapReward(balanceOfReward());
 
         uint256 _investedA = investedA;
         uint256 _investedB = investedB;
@@ -435,6 +446,10 @@ contract Joint {
         internal
         returns (address _swapTo, uint256 _receivedAmount)
     {
+        if (reward == tokenA || reward == tokenB || _rewardBal == 0) {
+            return (address(0), 0);
+        }
+
         _swapTo = findSwapTo(reward);
         //Call swap to get more of the of the swapTo token
         uint256[] memory amounts =
@@ -529,5 +544,4 @@ contract Joint {
     function setReinvest(bool _reinvest) external onlyAuthorized {
         reinvest = _reinvest;
     }
-
 }

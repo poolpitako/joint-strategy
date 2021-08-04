@@ -80,6 +80,12 @@ def weth():
 
 
 @pytest.fixture
+def router():
+    # Sushi
+    yield Contract("0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F")
+
+
+@pytest.fixture
 def masterchef():
     yield Contract("0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd")
 
@@ -90,19 +96,20 @@ def sushi():
 
 
 @pytest.fixture
-def joint(gov, providerA, providerB, Joint, router, masterchef, sushi, weth):
-    pid = 11
-    joint = gov.deploy(Joint, providerA, providerB, router, weth, sushi, pid)
+def mc_pid():
+    yield 11
+
+
+@pytest.fixture
+def joint(gov, providerA, providerB, Joint, router, masterchef, sushi, weth, mc_pid):
+    joint = gov.deploy(
+        Joint, providerA, providerB, router, weth, masterchef, sushi, mc_pid
+    )
+
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})
 
     yield joint
-
-
-@pytest.fixture
-def router():
-    # Sushi
-    yield Contract("0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F")
 
 
 @pytest.fixture
