@@ -15,10 +15,7 @@ import "../interfaces/uni/IUniswapV2Factory.sol";
 import "../interfaces/uni/IUniswapV2Pair.sol";
 import "../interfaces/IMasterChef.sol";
 
-import {
-    StrategyParams,
-    VaultAPI
-} from "@yearnvaults/contracts/BaseStrategy.sol";
+import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
 
 interface IERC20Extended {
     function decimals() external view returns (uint8);
@@ -104,31 +101,43 @@ contract Joint {
     constructor(
         address _providerA,
         address _providerB,
-        address _router
+        address _router,
+        address _weth,
+        address _reward,
+        uint256 _pid
     ) public {
-        _initialize(_providerA, _providerB, _router);
+        _initialize(_providerA, _providerB, _router, _weth, _reward, _pid);
     }
 
     function initialize(
         address _providerA,
         address _providerB,
-        address _router
+        address _router,
+        address _weth,
+        address _reward,
+        uint256 _pid
     ) external {
-        _initialize(_providerA, _providerB, _router);
+        _initialize(_providerA, _providerB, _router, _weth, _reward, _pid);
     }
 
     function _initialize(
         address _providerA,
         address _providerB,
-        address _router
+        address _router,
+        address _weth,
+        address _reward,
+        uint256 _pid
     ) internal {
         require(address(providerA) == address(0), "Joint already initialized");
         providerA = ProviderStrategy(_providerA);
         providerB = ProviderStrategy(_providerB);
+        router = _router;
+        WETH = _weth;
+        reward = _reward;
+        pid = _pid;
 
         tokenA = providerA.want();
         tokenB = providerB.want();
-        router = _router;
         reinvest = true;
 
         masterchef = IMasterchef(
@@ -151,7 +160,10 @@ contract Joint {
     function cloneJoint(
         address _providerA,
         address _providerB,
-        address _router
+        address _router,
+        address _weth,
+        address _reward,
+        uint256 _pid
     ) external returns (address newJoint) {
         bytes20 addressBytes = bytes20(address(this));
 
@@ -170,7 +182,14 @@ contract Joint {
             newJoint := create(0, clone_code, 0x37)
         }
 
-        Joint(newJoint).initialize(_providerA, _providerB, _router);
+        Joint(newJoint).initialize(
+            _providerA,
+            _providerB,
+            _router,
+            _weth,
+            _reward,
+            _pid
+        );
 
         emit Cloned(newJoint);
     }
@@ -256,9 +275,9 @@ contract Joint {
                     currentA = currentA.add(amountOut);
                 }
 
-                (uint256 aPnL, uint256 bPnL) =
-                    getPnL(currentA, currentB, _investedA, _investedB);
-                emit PnL(aPnL, bPnL);
+                (uint256 ratioA, uint256 ratioB) =
+                    getRatios(currentA, currentB, _investedA, _investedB);
+                emit Ratios(ratioA, ratioB, "after balance");
             }
 
             distributeProfit();
@@ -277,7 +296,7 @@ contract Joint {
         }
     }
 
-    event PnL(uint256 tokenA, uint256 tokenB);
+    event Ratios(uint256 tokenA, uint256 tokenB, string description);
     event SellToBalance(address sellToken, uint256 sellAmount);
 
     function calculateSellToBalance(
@@ -288,19 +307,19 @@ contract Joint {
     ) internal returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
-        (uint256 percentReturnA, uint256 percentReturnB) =
-            getPnL(currentA, currentB, startingA, startingB);
+        (uint256 ratioA, uint256 ratioB) =
+            getRatios(currentA, currentB, startingA, startingB);
 
         // If returns are equal, nothing to sell
-        if (percentReturnA == percentReturnB) return (address(0), 0);
+        if (ratioA == ratioB) return (address(0), 0);
 
-        emit PnL(percentReturnA, percentReturnB);
+        emit Ratios(ratioA, ratioB, "before balance");
 
         (uint256 _AForB, uint256 _BForA) = getSpotExchangeRates();
 
         uint256 numerator;
         uint256 denominator;
-        if (percentReturnA > percentReturnB) {
+        if (ratioA > ratioB) {
             _sellToken = tokenA;
             numerator = currentA.sub(startingA.mul(currentB).div(startingB));
             denominator = 1e18 + startingA.mul(_BForA).div(startingB);
@@ -313,7 +332,7 @@ contract Joint {
         emit SellToBalance(_sellToken, _sellAmount);
     }
 
-    function getPnL(
+    function getRatios(
         uint256 currentA,
         uint256 currentB,
         uint256 startingA,
@@ -329,8 +348,8 @@ contract Joint {
         returns (uint256 _AForB, uint256 _BForA)
     {
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        uint256 _0For1 = reserve0.mul(1e18).div(reserve1);
-        uint256 _1For0 = reserve1.mul(1e18).div(reserve0);
+        uint256 _0For1 = (reserve0.mul(1e18).div(reserve1)).mul(997).div(1000);
+        uint256 _1For0 = (reserve1.mul(1e18).div(reserve0)).mul(997).div(1000);
         if (pair.token0() == tokenA) {
             _AForB = _0For1;
             _BForA = _1For0;
@@ -368,10 +387,6 @@ contract Joint {
 
     function setPid(uint256 _newPid) external onlyGovernance {
         pid = _newPid;
-    }
-
-    function setWETH(address _weth) external onlyGovernance {
-        WETH = _weth;
     }
 
     function findSwapTo(address token) internal view returns (address) {
@@ -513,17 +528,4 @@ contract Joint {
         reinvest = _reinvest;
     }
 
-    function setProviderA(address _providerA) external onlyGovernance {
-        providerA = ProviderStrategy(_providerA);
-        require(providerA.want() == tokenA);
-    }
-
-    function setProviderB(address _providerB) external onlyGovernance {
-        providerB = ProviderStrategy(_providerB);
-        require(providerB.want() == tokenB);
-    }
-
-    function setReward(address _reward) external onlyGovernance {
-        reward = _reward;
-    }
 }

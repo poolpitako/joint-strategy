@@ -91,12 +91,8 @@ def sushi():
 
 @pytest.fixture
 def joint(gov, providerA, providerB, Joint, router, masterchef, sushi, weth):
-    joint = gov.deploy(Joint, providerA, providerB, router)
-    joint.setMasterChef(masterchef, {"from": gov})
-    joint.setReward(sushi, {"from": gov})
-    joint.setWETH(weth, {"from": gov})
-    joint.setPid(11, {"from": gov})
-
+    pid = 11
+    joint = gov.deploy(Joint, providerA, providerB, router, weth, sushi, pid)
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})
 
@@ -123,6 +119,10 @@ def providerA(gov, strategist, keeper, vaultA, ProviderStrategy):
 def providerB(gov, strategist, vaultB, ProviderStrategy):
     strategy = strategist.deploy(ProviderStrategy, vaultB)
 
+    # free up some debt ratio space
+    vaultB.updateStrategyDebtRatio(
+        "0x7A5D88510cD49E878ADe26E0f08bF374b5eCAF49", 8000, {"from": gov}
+    )
     vaultB.addStrategy(strategy, 2000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
 
     yield strategy

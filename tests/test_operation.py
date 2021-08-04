@@ -46,12 +46,13 @@ def test_operation(
     providerB.setTakeProfit(True, {"from": strategist})
     tx = providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    pnl_events = tx.events["PnL"]
-    print(f"{pnl_events}")
+    ratios_events = tx.events["Ratios"]
+    print(f"Ratios: {ratios_events}")
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalGain"] > 0
     assert vaultB.strategies(providerB).dict()["totalGain"] > 0
+    assert ratios_events[-1]["tokenA"] == ratios_events[-1]["tokenB"]
 
     # Harvest should be a no-op
     providerA.harvest({"from": strategist})
@@ -126,12 +127,13 @@ def test_operation_swap_a4b(
     providerB.setTakeProfit(True, {"from": strategist})
     tx = providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    pnl_events = tx.events["PnL"]
-    print(f"{pnl_events}")
+    ratios_events = tx.events["Ratios"]
+    print(f"Ratios: {ratios_events}")
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
     assert vaultB.strategies(providerB).dict()["totalLoss"] > 0
+    assert pytest.approx(ratios_events[-1]["tokenA"], abs=75) == ratios_events[-1]["tokenB"]
 
     print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
     print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
@@ -192,12 +194,13 @@ def test_operation_swap_b4a(
     providerB.setTakeProfit(True, {"from": strategist})
     tx = providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    pnl_events = tx.events["PnL"]
-    print(f"{pnl_events}")
+    ratios_events = tx.events["Ratios"]
+    print(f"Ratios: {ratios_events}")
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
     assert vaultB.strategies(providerB).dict()["totalLoss"] > 0
+    assert pytest.approx(ratios_events[-1]["tokenA"], abs=75) == ratios_events[-1]["tokenB"]
 
     print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
     print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
