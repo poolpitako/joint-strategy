@@ -227,8 +227,10 @@ contract Joint {
         (uint256 aLiquidated, uint256 bLiquidated) = liquidatePosition();
         investedA = investedB = 0;
 
-        if (reinvest) return; // Don't distributeProfit
+        if (reinvest) return; // Don't return funds
 
+        // If we have previously invested funds, let's distrubute PnL equally in
+        // each token's own terms
         if (_investedA != 0 && _investedB != 0) {
             uint256 currentA =
                 aLiquidated.add(
@@ -278,7 +280,7 @@ contract Joint {
             }
         }
 
-        distributeProfit();
+        returnLooseToProviders();
     }
 
     function adjustPosition() external onlyProviders {
@@ -293,7 +295,7 @@ contract Joint {
                     balanceOfPair() == 0 &&
                     investedA == 0 &&
                     investedB == 0
-            );
+            ); // don't create LP if we are already invested
 
             (investedA, investedB, ) = createLP();
             depositLP();
@@ -559,7 +561,7 @@ contract Joint {
             );
     }
 
-    function distributeProfit() internal {
+    function returnLooseToProviders() internal {
         uint256 balanceA = balanceOfA();
         if (balanceA > 0) {
             IERC20(tokenA).transfer(address(providerA), balanceA);
@@ -602,5 +604,19 @@ contract Joint {
 
     function setReinvest(bool _reinvest) external onlyAuthorized {
         reinvest = _reinvest;
+    }
+
+    function liquidateAndReturn() external onlyAuthorized {
+        liquidatePosition();
+        returnLooseToProviders();
+    }
+
+    function swapTokenForToken(
+        address swapFrom,
+        address swapTo,
+        uint256 swapInAmount
+    ) external onlyGovernance returns (uint256) {
+        require(swapTo == tokenA || swapTo == tokenB); // swapTo must be tokenA or tokenB
+        return sellCapital(swapFrom, swapTo, swapInAmount);
     }
 }
