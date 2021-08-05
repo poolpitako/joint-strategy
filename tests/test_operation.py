@@ -31,9 +31,17 @@ def test_operation(
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
 
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
+
     # Wait plz
     chain.sleep(3600 * 1)
     chain.mine(int(3600 / 13))
+
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
 
     # If there is any profit it should go to the providers
     assert joint.pendingReward() > 0
@@ -102,6 +110,10 @@ def test_operation_swap_a4b(
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
 
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
+
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     router.swapExactTokensForTokens(
         tokenA.balanceOf(tokenA_whale),
@@ -112,9 +124,17 @@ def test_operation_swap_a4b(
         {"from": tokenA_whale},
     )
 
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
+
     # Wait plz
     chain.sleep(3600 * 1)
     chain.mine(int(3600 / 13))
+
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
 
     # If there is any profit it should go to the providers
     assert joint.pendingReward() > 0
@@ -172,6 +192,10 @@ def test_operation_swap_b4a(
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
 
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
+
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
     router.swapExactTokensForTokens(
         1500 * 1e18,
@@ -182,9 +206,17 @@ def test_operation_swap_b4a(
         {"from": tokenB_whale},
     )
 
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
+
     # Wait plz
     chain.sleep(3600 * 1)
     chain.mine(int(3600 / 13))
+
+    print(
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"
+    )
 
     # If there is any profit it should go to the providers
     assert joint.pendingReward() > 0

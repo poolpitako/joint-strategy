@@ -225,23 +225,7 @@ contract Joint {
         return string(abi.encodePacked("JointOf", ab));
     }
 
-    /*
-    function estimatedTotalAssetsInToken(address token)
-        external
-        view
-        returns (uint256)
-    {
-        require(token == tokenA || token == tokenB);
-
-        uint256 balanceOfToken = token == tokenA ? balanceOfA() : balanceOfB();
-
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-
-        return 0; //balanceOfToken.add(reserve);
-    }
-    */
-
-    function prepareReturn() external onlyProviders {
+        function prepareReturn() external onlyProviders {
         // Gets the reward from the masterchef contract
         if (balanceOfStake() != 0) {
             getReward();
@@ -255,7 +239,9 @@ contract Joint {
         (uint256 aLiquidated, uint256 bLiquidated) = liquidatePosition();
         investedA = investedB = 0;
 
-        if (!reinvest) {
+        if (reinvest) return; // Don't distributeProfit
+        
+        if (_investedA != 0 && _investedB != 0) {
             uint256 currentA =
                 aLiquidated.add(
                     rewardSwappedTo == tokenA ? rewardSwapAmount : 0
@@ -265,6 +251,11 @@ contract Joint {
                     rewardSwappedTo == tokenB ? rewardSwapAmount : 0
                 );
 
+            (uint256 ratioA, uint256 ratioB) =
+                getRatios(currentA, currentB, _investedA, _investedB);
+
+            emit Ratios(ratioA, ratioB, "before balance");
+
             (address sellToken, uint256 sellAmount) =
                 calculateSellToBalance(
                     currentA,
@@ -273,28 +264,33 @@ contract Joint {
                     _investedB
                 );
             if (sellToken != address(0) && sellAmount != 0) {
-                uint256 amountOut =
+                uint256 buyAmount =
                     sellCapital(
                         sellToken,
                         sellToken == tokenA ? tokenB : tokenA,
                         sellAmount
                     );
+                emit SellToBalance(sellToken, sellAmount, buyAmount);
 
                 if (sellToken == tokenA) {
                     currentA = currentA.sub(sellAmount);
-                    currentB = currentB.add(amountOut);
+                    currentB = currentB.add(buyAmount);
                 } else {
                     currentB = currentB.sub(sellAmount);
-                    currentA = currentA.add(amountOut);
+                    currentA = currentA.add(buyAmount);
                 }
 
-                (uint256 ratioA, uint256 ratioB) =
-                    getRatios(currentA, currentB, _investedA, _investedB);
+                (ratioA, ratioB) = getRatios(
+                    currentA,
+                    currentB,
+                    _investedA,
+                    _investedB
+                );
                 emit Ratios(ratioA, ratioB, "after balance");
             }
-
-            distributeProfit();
         }
+
+        distributeProfit();
     }
 
     function adjustPosition() external onlyProviders {
@@ -309,24 +305,102 @@ contract Joint {
         }
     }
 
+    function estimatedTotalAssetsInToken(address token)
+        external
+        view
+        returns (uint256)
+    {
+        require(token == tokenA || token == tokenB);
+
+        uint256 rewardsPending = pendingReward();
+
+        uint256 aBalance;
+        uint256 bBalance;
+
+        if (reward == tokenA) {
+            aBalance = aBalance.add(rewardsPending);
+        } else if (reward == tokenB) {
+            bBalance = bBalance.add(rewardsPending);
+        } else if (rewardsPending != 0) {
+            address swapTo = findSwapTo(reward);
+            uint256[] memory outAmounts =
+                IUniswapV2Router02(router).getAmountsOut(
+                    rewardsPending,
+                    getTokenOutPath(reward, swapTo)
+                );
+            if (swapTo == tokenA) {
+                aBalance = aBalance.add(outAmounts[outAmounts.length - 1]);
+            } else if (swapTo == tokenB) {
+                bBalance = bBalance.add(outAmounts[outAmounts.length - 1]);
+            }
+        }
+
+        uint256 reserveA;
+        uint256 reserveB;
+        if (tokenA == pair.token0()) {
+            (reserveA, reserveB, ) = pair.getReserves();
+        } else {
+            (reserveB, reserveA, ) = pair.getReserves();
+        }
+        uint256 lpBal = balanceOfStake().add(balanceOfPair());
+        uint256 percentTotal =
+            lpBal.mul(pair.decimals()).div(pair.totalSupply());
+        aBalance = aBalance.add(
+            reserveA.mul(percentTotal).div(pair.decimals())
+        );
+        bBalance = bBalance.add(
+            reserveB.mul(percentTotal).div(pair.decimals())
+        );
+
+        (address sellToken, uint256 sellAmount) =
+            calculateSellToBalance(aBalance, bBalance, investedA, investedB);
+
+        if (sellToken == tokenA) {
+            uint256 buyAmount =
+                IUniswapV2Router02(router).getAmountOut(
+                    sellAmount,
+                    reserveA,
+                    reserveB
+                );
+            aBalance = aBalance.sub(sellAmount);
+            bBalance = bBalance.add(buyAmount);
+        } else if (sellToken == tokenB) {
+            uint256 buyAmount =
+                IUniswapV2Router02(router).getAmountOut(
+                    sellAmount,
+                    reserveB,
+                    reserveA
+                );
+            bBalance = bBalance.sub(sellAmount);
+            aBalance = aBalance.add(buyAmount);
+        }
+
+        if (token == tokenA) {
+            return aBalance.add(balanceOfA());
+        } else if (token == tokenB) {
+            return bBalance.add(balanceOfB());
+        }
+    }
+
     event Ratios(uint256 tokenA, uint256 tokenB, string description);
-    event SellToBalance(address sellToken, uint256 sellAmount);
+    event SellToBalance(
+        address sellToken,
+        uint256 sellAmount,
+        uint256 buyAmount
+    );
 
     function calculateSellToBalance(
         uint256 currentA,
         uint256 currentB,
         uint256 startingA,
         uint256 startingB
-    ) internal returns (address _sellToken, uint256 _sellAmount) {
+    ) internal view returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
         (uint256 ratioA, uint256 ratioB) =
             getRatios(currentA, currentB, startingA, startingB);
 
-        // If returns are equal, nothing to sell
         if (ratioA == ratioB) return (address(0), 0);
-
-        emit Ratios(ratioA, ratioB, "before balance");
 
         (uint256 _AForB, uint256 _BForA) = getSpotExchangeRates();
 
@@ -342,7 +416,6 @@ contract Joint {
             denominator = 1e18 + startingB.mul(_AForB).div(startingA);
         }
         _sellAmount = numerator.mul(1e18).div(denominator);
-        emit SellToBalance(_sellToken, _sellAmount);
     }
 
     function getRatios(
