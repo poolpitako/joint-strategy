@@ -213,7 +213,7 @@ contract Joint {
         return string(abi.encodePacked("JointOf", ab));
     }
 
-        function prepareReturn() external onlyProviders {
+    function prepareReturn() external onlyProviders {
         // Gets the reward from the masterchef contract
         if (balanceOfStake() != 0) {
             getReward();
@@ -228,7 +228,7 @@ contract Joint {
         investedA = investedB = 0;
 
         if (reinvest) return; // Don't distributeProfit
-        
+
         if (_investedA != 0 && _investedB != 0) {
             uint256 currentA =
                 aLiquidated.add(
@@ -288,6 +288,13 @@ contract Joint {
         }
 
         if (reinvest) {
+            require(
+                balanceOfStake() == 0 &&
+                    balanceOfPair() == 0 &&
+                    investedA == 0 &&
+                    investedB == 0
+            );
+
             (investedA, investedB, ) = createLP();
             depositLP();
         }
@@ -452,15 +459,6 @@ contract Joint {
                 address(this),
                 now
             );
-    }
-
-    function setMasterChef(address _masterchef) external onlyGovernance {
-        masterchef = IMasterchef(_masterchef);
-        IERC20(getPair()).approve(_masterchef, type(uint256).max);
-    }
-
-    function setPid(uint256 _newPid) external onlyGovernance {
-        pid = _newPid;
     }
 
     function findSwapTo(address token) internal view returns (address) {
