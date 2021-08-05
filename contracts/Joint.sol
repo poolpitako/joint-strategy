@@ -79,18 +79,6 @@ contract Joint {
         _;
     }
 
-    modifier onlyKeepers {
-        require(
-            msg.sender == providerA.vault().governance() ||
-                msg.sender == providerB.vault().governance() ||
-                msg.sender == providerA.strategist() ||
-                msg.sender == providerB.strategist() ||
-                msg.sender == providerA.keeper() ||
-                msg.sender == providerB.keeper()
-        );
-        _;
-    }
-
     modifier onlyProviders {
         require(
             msg.sender == address(providerA) || msg.sender == address(providerB)
