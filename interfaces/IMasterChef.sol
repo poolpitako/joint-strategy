@@ -23,9 +23,4 @@ interface IMasterchef {
     function userInfo(uint256, address) external view returns (UserInfo memory);
 
     function poolInfo(uint256) external view returns (PoolInfo memory);
-
-    function pendingSushi(uint256 _pid, address _user)
-        external
-        view
-        returns (uint256);
 }

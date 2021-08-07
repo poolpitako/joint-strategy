@@ -201,17 +201,7 @@ contract Joint {
         emit Cloned(newJoint);
     }
 
-    function name() external view returns (string memory) {
-        string memory ab =
-            string(
-                abi.encodePacked(
-                    IERC20Extended(address(tokenA)).symbol(),
-                    IERC20Extended(address(tokenB)).symbol()
-                )
-            );
-
-        return string(abi.encodePacked("JointOf", ab));
-    }
+    function name() external view virtual returns (string memory) {}
 
     function prepareReturn() external onlyProviders {
         // Gets the reward from the masterchef contract
@@ -598,9 +588,7 @@ contract Joint {
         return masterchef.userInfo(pid, address(this)).amount;
     }
 
-    function pendingReward() public view returns (uint256) {
-        return masterchef.pendingSushi(pid, address(this));
-    }
+    function pendingReward() public view virtual returns (uint256) {}
 
     function setReinvest(bool _reinvest) external onlyAuthorized {
         reinvest = _reinvest;
