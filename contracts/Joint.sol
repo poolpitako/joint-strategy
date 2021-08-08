@@ -40,6 +40,8 @@ contract Joint {
     using Address for address;
     using SafeMath for uint256;
 
+    uint256 private constant RATIO_PRECISION = 1e4;
+
     ProviderStrategy public providerA;
     ProviderStrategy public providerB;
 
@@ -148,9 +150,6 @@ contract Joint {
         tokenB = providerB.want();
         reinvest = true;
 
-        reward = address(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2);
-        WETH = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-
         pair = IUniswapV2Pair(getPair());
 
         IERC20(address(pair)).approve(address(masterchef), type(uint256).max);
@@ -204,35 +203,37 @@ contract Joint {
     function name() external view virtual returns (string memory) {}
 
     function prepareReturn() external onlyProviders {
-        // Gets the reward from the masterchef contract
-        if (balanceOfStake() != 0) {
-            getReward();
-        }
-
-        (address rewardSwappedTo, uint256 rewardSwapAmount) =
-            swapReward(balanceOfReward());
-
-        uint256 _investedA = investedA;
-        uint256 _investedB = investedB;
-        (uint256 aLiquidated, uint256 bLiquidated) = liquidatePosition();
-        investedA = investedB = 0;
-
-        if (reinvest) return; // Don't return funds
-
         // If we have previously invested funds, let's distrubute PnL equally in
         // each token's own terms
-        if (_investedA != 0 && _investedB != 0) {
-            uint256 currentA =
-                aLiquidated.add(
-                    rewardSwappedTo == tokenA ? rewardSwapAmount : 0
-                );
-            uint256 currentB =
-                bLiquidated.add(
-                    rewardSwappedTo == tokenB ? rewardSwapAmount : 0
-                );
+        if (investedA != 0 && investedB != 0) {
+            // Track starting amount in case reward is one of LP tokens
+            uint256 startingRewardBal = balanceOfReward();
+
+            if (balanceOfStake() != 0) {
+                getReward();
+            }
+
+            uint256 rewardAmount = balanceOfReward().sub(startingRewardBal);
+
+            // Liquidate will also claim rewards
+            (uint256 currentA, uint256 currentB) = liquidatePosition();
+
+            if (tokenA == reward) {
+                currentA = currentA.add(rewardAmount);
+            } else if (tokenB == reward) {
+                currentB = currentB.add(rewardAmount);
+            } else {
+                (address rewardSwappedTo, uint256 rewardSwapAmount) =
+                    swapReward(balanceOfReward().sub(startingRewardBal));
+                if (rewardSwappedTo == tokenA) {
+                    currentA = currentA.add(rewardSwapAmount);
+                } else if (rewardSwappedTo == tokenB) {
+                    currentB = currentB.add(rewardSwapAmount);
+                }
+            }
 
             (uint256 ratioA, uint256 ratioB) =
-                getRatios(currentA, currentB, _investedA, _investedB);
+                getRatios(currentA, currentB, investedA, investedB);
 
             emit Ratios(ratioA, ratioB, "before balance");
 
@@ -240,9 +241,10 @@ contract Joint {
                 calculateSellToBalance(
                     currentA,
                     currentB,
-                    _investedA,
-                    _investedB
+                    investedA,
+                    investedB
                 );
+
             if (sellToken != address(0) && sellAmount != 0) {
                 uint256 buyAmount =
                     sellCapital(
@@ -263,14 +265,18 @@ contract Joint {
                 (ratioA, ratioB) = getRatios(
                     currentA,
                     currentB,
-                    _investedA,
-                    _investedB
+                    investedA,
+                    investedB
                 );
                 emit Ratios(ratioA, ratioB, "after balance");
             }
         }
 
-        returnLooseToProviders();
+        investedA = investedB = 0;
+
+        if (!reinvest) {
+            returnLooseToProviders();
+        }
     }
 
     function adjustPosition() external onlyProviders {
@@ -305,9 +311,9 @@ contract Joint {
         uint256 bBalance;
 
         if (reward == tokenA) {
-            aBalance = aBalance.add(rewardsPending);
+            aBalance = rewardsPending;
         } else if (reward == tokenB) {
-            bBalance = bBalance.add(rewardsPending);
+            bBalance = rewardsPending;
         } else if (rewardsPending != 0) {
             address swapTo = findSwapTo(reward);
             uint256[] memory outAmounts =
@@ -316,9 +322,9 @@ contract Joint {
                     getTokenOutPath(reward, swapTo)
                 );
             if (swapTo == tokenA) {
-                aBalance = aBalance.add(outAmounts[outAmounts.length - 1]);
+                aBalance = outAmounts[outAmounts.length - 1];
             } else if (swapTo == tokenB) {
-                bBalance = bBalance.add(outAmounts[outAmounts.length - 1]);
+                bBalance = outAmounts[outAmounts.length - 1];
             }
         }
 
@@ -330,14 +336,10 @@ contract Joint {
             (reserveB, reserveA, ) = pair.getReserves();
         }
         uint256 lpBal = balanceOfStake().add(balanceOfPair());
-        uint256 percentTotal =
-            lpBal.mul(pair.decimals()).div(pair.totalSupply());
-        aBalance = aBalance.add(
-            reserveA.mul(percentTotal).div(pair.decimals())
-        );
-        bBalance = bBalance.add(
-            reserveB.mul(percentTotal).div(pair.decimals())
-        );
+        uint256 pairPrecision = 10**uint256(pair.decimals());
+        uint256 percentTotal = lpBal.mul(pairPrecision).div(pair.totalSupply());
+        aBalance = aBalance.add(reserveA.mul(percentTotal).div(pairPrecision));
+        bBalance = bBalance.add(reserveB.mul(percentTotal).div(pairPrecision));
 
         (address sellToken, uint256 sellAmount) =
             calculateSellToBalance(aBalance, bBalance, investedA, investedB);
@@ -389,20 +391,28 @@ contract Joint {
 
         if (ratioA == ratioB) return (address(0), 0);
 
-        (uint256 _AForB, uint256 _BForA) = getSpotExchangeRates();
-
         uint256 numerator;
         uint256 denominator;
+        uint256 precision;
+        uint256 exchangeRate;
         if (ratioA > ratioB) {
             _sellToken = tokenA;
+            precision = 10**uint256(IERC20Extended(tokenA).decimals());
+            (, exchangeRate) = getSpotExchangeRates();
             numerator = currentA.sub(startingA.mul(currentB).div(startingB));
-            denominator = 1e18 + startingA.mul(_BForA).div(startingB);
+            denominator =
+                precision +
+                startingA.mul(exchangeRate).div(startingB);
         } else {
             _sellToken = tokenB;
+            precision = 10**uint256(IERC20Extended(tokenB).decimals());
+            (exchangeRate, ) = getSpotExchangeRates();
             numerator = currentB.sub(startingB.mul(currentA).div(startingA));
-            denominator = 1e18 + startingB.mul(_AForB).div(startingA);
+            denominator =
+                precision +
+                startingB.mul(exchangeRate).div(startingA);
         }
-        _sellAmount = numerator.mul(1e18).div(denominator);
+        _sellAmount = numerator.mul(precision).div(denominator);
     }
 
     function getRatios(
@@ -411,8 +421,8 @@ contract Joint {
         uint256 startingA,
         uint256 startingB
     ) internal pure returns (uint256 _a, uint256 _b) {
-        _a = currentA.mul(1e4).div(startingA);
-        _b = currentB.mul(1e4).div(startingB);
+        _a = currentA.mul(RATIO_PRECISION).div(startingA);
+        _b = currentB.mul(RATIO_PRECISION).div(startingB);
     }
 
     function getSpotExchangeRates()
@@ -421,8 +431,17 @@ contract Joint {
         returns (uint256 _AForB, uint256 _BForA)
     {
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        uint256 _0For1 = (reserve0.mul(1e18).div(reserve1)).mul(997).div(1000);
-        uint256 _1For0 = (reserve1.mul(1e18).div(reserve0)).mul(997).div(1000);
+
+        uint256 token0Precision =
+            10**uint256(IERC20Extended(pair.token0()).decimals());
+        uint256 token1Precision =
+            10**uint256(IERC20Extended(pair.token1()).decimals());
+
+        uint256 _0For1 =
+            (reserve0.mul(token1Precision).div(reserve1)).mul(997).div(1000);
+        uint256 _1For0 =
+            (reserve1.mul(token0Precision).div(reserve0)).mul(997).div(1000);
+
         if (pair.token0() == tokenA) {
             _AForB = _0For1;
             _BForA = _1For0;
@@ -502,16 +521,7 @@ contract Joint {
         }
 
         _swapTo = findSwapTo(reward);
-        //Call swap to get more of the of the swapTo token
-        uint256[] memory amounts =
-            IUniswapV2Router02(router).swapExactTokensForTokens(
-                _rewardBal,
-                0,
-                getTokenOutPath(reward, _swapTo),
-                address(this),
-                now
-            );
-        _receivedAmount = amounts[amounts.length - 1];
+        _receivedAmount = sellCapital(reward, _swapTo, _rewardBal);
     }
 
     // If there is a lot of impermanent loss, some capital will need to be sold
@@ -586,6 +596,29 @@ contract Joint {
 
     function balanceOfStake() public view returns (uint256) {
         return masterchef.userInfo(pid, address(this)).amount;
+    }
+
+    function balanceOfTokensInLP()
+        public
+        view
+        returns (uint256 _balanceA, uint256 _balanceB)
+    {
+        uint256 reserveA;
+        uint256 reserveB;
+        if (tokenA == pair.token0()) {
+            (reserveA, reserveB, ) = pair.getReserves();
+        } else {
+            (reserveB, reserveA, ) = pair.getReserves();
+        }
+        uint256 lpBal = balanceOfStake().add(balanceOfPair());
+        uint256 percentTotal =
+            lpBal.mul(10**uint256(pair.decimals())).div(pair.totalSupply());
+        _balanceA = reserveA.mul(percentTotal).div(
+            10**uint256(pair.decimals())
+        );
+        _balanceB = reserveB.mul(percentTotal).div(
+            10**uint256(pair.decimals())
+        );
     }
 
     function pendingReward() public view virtual returns (uint256) {}

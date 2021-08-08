@@ -101,7 +101,9 @@ def mc_pid():
 
 
 @pytest.fixture
-def joint(gov, providerA, providerB, SushiJoint, router, masterchef, sushi, weth, mc_pid):
+def joint(
+    gov, providerA, providerB, SushiJoint, router, masterchef, sushi, weth, mc_pid
+):
     joint = gov.deploy(
         SushiJoint, providerA, providerB, router, weth, masterchef, sushi, mc_pid
     )
