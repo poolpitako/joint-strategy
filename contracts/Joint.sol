@@ -146,8 +146,8 @@ contract Joint {
         reward = _reward;
         pid = _pid;
 
-        tokenA = providerA.want();
-        tokenB = providerB.want();
+        tokenA = address(providerA.want());
+        tokenB = address(providerB.want());
         reinvest = true;
 
         pair = IUniswapV2Pair(getPair());
@@ -216,7 +216,7 @@ contract Joint {
             uint256 rewardAmount = balanceOfReward().sub(startingRewardBal);
 
             // Liquidate will also claim rewards
-            (uint256 currentA, uint256 currentB) = liquidatePosition();
+            (uint256 currentA, uint256 currentB) = _liquidatePosition();
 
             if (tokenA == reward) {
                 currentA = currentA.add(rewardAmount);
@@ -275,7 +275,7 @@ contract Joint {
         investedA = investedB = 0;
 
         if (!reinvest) {
-            returnLooseToProviders();
+            _returnLooseToProviders();
         }
     }
 
@@ -542,7 +542,7 @@ contract Joint {
         _amountOut = amounts[amounts.length - 1];
     }
 
-    function liquidatePosition() internal returns (uint256, uint256) {
+    function _liquidatePosition() internal returns (uint256, uint256) {
         if (balanceOfStake() != 0) {
             masterchef.withdraw(pid, balanceOfStake());
         }
@@ -561,7 +561,7 @@ contract Joint {
             );
     }
 
-    function returnLooseToProviders() internal {
+    function _returnLooseToProviders() internal {
         uint256 balanceA = balanceOfA();
         if (balanceA > 0) {
             IERC20(tokenA).transfer(address(providerA), balanceA);
@@ -627,9 +627,12 @@ contract Joint {
         reinvest = _reinvest;
     }
 
-    function liquidateAndReturn() external onlyAuthorized {
-        liquidatePosition();
-        returnLooseToProviders();
+    function liquidatePosition() external onlyAuthorized {
+        _liquidatePosition();
+    }
+
+    function returnLooseToProviders() external onlyAuthorized {
+        _returnLooseToProviders();
     }
 
     function swapTokenForToken(
