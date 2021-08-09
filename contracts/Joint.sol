@@ -298,13 +298,11 @@ contract Joint {
         }
     }
 
-    function estimatedTotalAssetsAfterBalance(address token)
-        external
+    function estimatedTotalAssetsAfterBalance()
+        public
         view
         returns (uint256 _aBalance, uint256 _bBalance)
     {
-        require(token == tokenA || token == tokenB);
-
         uint256 rewardsPending = pendingReward();
 
         (_aBalance, _bBalance) = balanceOfTokensInLP();
@@ -354,6 +352,19 @@ contract Joint {
 
         _aBalance = _aBalance.add(balanceOfA());
         _bBalance = _bBalance.add(balanceOfB());
+    }
+
+    function estimatedTotalAssetsInToken(address token)
+        external
+        view
+        returns (uint256 _balance)
+    {
+        require(token == tokenA || token == tokenB);
+        if (token == tokenA) {
+            (_balance, ) = estimatedTotalAssetsAfterBalance();
+        } else {
+            (, _balance) = estimatedTotalAssetsAfterBalance();
+        }
     }
 
     event Ratios(uint256 tokenA, uint256 tokenB, string description);
