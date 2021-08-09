@@ -298,22 +298,21 @@ contract Joint {
         }
     }
 
-    function estimatedTotalAssetsInToken(address token)
+    function estimatedTotalAssetsAfterBalance(address token)
         external
         view
-        returns (uint256)
+        returns (uint256 _aBalance, uint256 _bBalance)
     {
         require(token == tokenA || token == tokenB);
 
         uint256 rewardsPending = pendingReward();
 
-        uint256 aBalance;
-        uint256 bBalance;
+        (_aBalance, _bBalance) = balanceOfTokensInLP();
 
         if (reward == tokenA) {
-            aBalance = rewardsPending;
+            _aBalance = _aBalance.add(rewardsPending);
         } else if (reward == tokenB) {
-            bBalance = rewardsPending;
+            _bBalance = _bBalance.add(rewardsPending);
         } else if (rewardsPending != 0) {
             address swapTo = findSwapTo(reward);
             uint256[] memory outAmounts =
@@ -322,27 +321,16 @@ contract Joint {
                     getTokenOutPath(reward, swapTo)
                 );
             if (swapTo == tokenA) {
-                aBalance = outAmounts[outAmounts.length - 1];
+                _aBalance = _aBalance.add(outAmounts[outAmounts.length - 1]);
             } else if (swapTo == tokenB) {
-                bBalance = outAmounts[outAmounts.length - 1];
+                _bBalance = _bBalance.add(outAmounts[outAmounts.length - 1]);
             }
         }
 
-        uint256 reserveA;
-        uint256 reserveB;
-        if (tokenA == pair.token0()) {
-            (reserveA, reserveB, ) = pair.getReserves();
-        } else {
-            (reserveB, reserveA, ) = pair.getReserves();
-        }
-        uint256 lpBal = balanceOfStake().add(balanceOfPair());
-        uint256 pairPrecision = 10**uint256(pair.decimals());
-        uint256 percentTotal = lpBal.mul(pairPrecision).div(pair.totalSupply());
-        aBalance = aBalance.add(reserveA.mul(percentTotal).div(pairPrecision));
-        bBalance = bBalance.add(reserveB.mul(percentTotal).div(pairPrecision));
-
         (address sellToken, uint256 sellAmount) =
-            calculateSellToBalance(aBalance, bBalance, investedA, investedB);
+            calculateSellToBalance(_aBalance, _bBalance, investedA, investedB);
+
+        (uint256 reserveA, uint256 reserveB) = getReserves();
 
         if (sellToken == tokenA) {
             uint256 buyAmount =
@@ -351,8 +339,8 @@ contract Joint {
                     reserveA,
                     reserveB
                 );
-            aBalance = aBalance.sub(sellAmount);
-            bBalance = bBalance.add(buyAmount);
+            _aBalance = _aBalance.sub(sellAmount);
+            _bBalance = _bBalance.add(buyAmount);
         } else if (sellToken == tokenB) {
             uint256 buyAmount =
                 IUniswapV2Router02(router).getAmountOut(
@@ -360,15 +348,12 @@ contract Joint {
                     reserveB,
                     reserveA
                 );
-            bBalance = bBalance.sub(sellAmount);
-            aBalance = aBalance.add(buyAmount);
+            _bBalance = _bBalance.sub(sellAmount);
+            _aBalance = _aBalance.add(buyAmount);
         }
 
-        if (token == tokenA) {
-            return aBalance.add(balanceOfA());
-        } else if (token == tokenB) {
-            return bBalance.add(balanceOfB());
-        }
+        _aBalance = _aBalance.add(balanceOfA());
+        _bBalance = _bBalance.add(balanceOfB());
     }
 
     event Ratios(uint256 tokenA, uint256 tokenB, string description);
@@ -430,24 +415,30 @@ contract Joint {
         view
         returns (uint256 _AForB, uint256 _BForA)
     {
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
+        (uint256 reserveA, uint256 reserveB) = getReserves();
 
-        uint256 token0Precision =
-            10**uint256(IERC20Extended(pair.token0()).decimals());
-        uint256 token1Precision =
-            10**uint256(IERC20Extended(pair.token1()).decimals());
+        uint256 tokenAPrecision =
+            10**uint256(IERC20Extended(tokenA).decimals());
+        uint256 tokenBPrecision =
+            10**uint256(IERC20Extended(tokenB).decimals());
 
-        uint256 _0For1 =
-            (reserve0.mul(token1Precision).div(reserve1)).mul(997).div(1000);
-        uint256 _1For0 =
-            (reserve1.mul(token0Precision).div(reserve0)).mul(997).div(1000);
+        _AForB = (reserveA.mul(tokenAPrecision).div(reserveB)).mul(997).div(
+            1000
+        );
+        _BForA = (reserveB.mul(tokenBPrecision).div(reserveA)).mul(997).div(
+            1000
+        );
+    }
 
-        if (pair.token0() == tokenA) {
-            _AForB = _0For1;
-            _BForA = _1For0;
+    function getReserves()
+        public
+        view
+        returns (uint256 reserveA, uint256 reserveB)
+    {
+        if (tokenA == pair.token0()) {
+            (reserveA, reserveB, ) = pair.getReserves();
         } else {
-            _BForA = _0For1;
-            _AForB = _1For0;
+            (reserveB, reserveA, ) = pair.getReserves();
         }
     }
 
@@ -603,13 +594,7 @@ contract Joint {
         view
         returns (uint256 _balanceA, uint256 _balanceB)
     {
-        uint256 reserveA;
-        uint256 reserveB;
-        if (tokenA == pair.token0()) {
-            (reserveA, reserveB, ) = pair.getReserves();
-        } else {
-            (reserveB, reserveA, ) = pair.getReserves();
-        }
+        (uint256 reserveA, uint256 reserveB) = getReserves();
         uint256 lpBal = balanceOfStake().add(balanceOfPair());
         uint256 percentTotal =
             lpBal.mul(10**uint256(pair.decimals())).div(pair.totalSupply());
