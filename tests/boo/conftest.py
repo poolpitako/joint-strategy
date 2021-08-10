@@ -102,7 +102,7 @@ def mc_pid():
 
 @pytest.fixture
 def joint(gov, providerA, providerB, BooJoint, router, masterchef, boo, weth, mc_pid):
-    joint = Contract("0x7913ABcCF3826C3e87d0651c3C2F090Db423f7B9")
+    joint = Contract("0x327025a6Cb4A4b61071B53066087252B779BF8B0")
     # joint = gov.deploy(
     #    BooJoint, providerA, providerB, router, weth, masterchef, boo, mc_pid
     # )

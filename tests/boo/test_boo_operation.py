@@ -3,6 +3,7 @@ import pytest
 from brownie import Contract, Wei
 
 
+@pytest.mark.require_network("ftm-main-fork")
 def test_operation(
     chain,
     vaultA,
@@ -87,6 +88,7 @@ def test_operation(
     print(f"wftm profit: {vaultB.strategies(providerB).dict()['totalGain']/1e18} wftm")
 
 
+@pytest.mark.require_network("ftm-main-fork")
 def test_operation_swap_a4b(
     chain,
     vaultA,
@@ -171,6 +173,7 @@ def test_operation_swap_a4b(
     print(f"wftm loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} wftm")
 
 
+@pytest.mark.require_network("ftm-main-fork")
 def test_operation_swap_b4a(
     chain,
     vaultA,
