@@ -23,6 +23,10 @@ interface JointAPI {
     function prepareReturn() external;
 
     function adjustPosition() external;
+
+    function providerA() external view returns (address);
+
+    function providerB() external view returns (address);
 }
 
 contract ProviderStrategy is BaseStrategy {
@@ -196,6 +200,10 @@ contract ProviderStrategy is BaseStrategy {
     }
 
     function setJoint(address _joint) external onlyGovernance {
+        require(
+            JointAPI(_joint).providerA() == address(this) ||
+                JointAPI(_joint).providerB() == address(this)
+        );
         joint = _joint;
     }
 
