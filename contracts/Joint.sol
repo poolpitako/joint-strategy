@@ -191,8 +191,8 @@ contract Joint {
             _providerA,
             _providerB,
             _router,
-            _masterchef,
             _weth,
+            _masterchef,
             _reward,
             _pid
         );
