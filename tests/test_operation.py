@@ -9,6 +9,8 @@ def test_operation(
     vaultB,
     tokenA,
     tokenB,
+    amountA,
+    amountB,
     providerA,
     providerB,
     joint,
@@ -19,10 +21,10 @@ def test_operation(
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(10 * 1e18, {"from": tokenA_whale})
+    vaultA.deposit(amountA, {"from": tokenA_whale})
 
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(150 * 1e18, {"from": tokenB_whale})
+    vaultB.deposit(amountB, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
@@ -60,7 +62,10 @@ def test_operation(
     assert providerB.balanceOfWant() > 0
     assert vaultA.strategies(providerA).dict()["totalGain"] > 0
     assert vaultB.strategies(providerB).dict()["totalGain"] > 0
-    assert ratios_events[-1]["tokenA"] == ratios_events[-1]["tokenB"]
+    assert (
+        pytest.approx(ratios_events[-1]["tokenA"], abs=125)
+        == ratios_events[-1]["tokenB"]
+    )
 
     # Harvest should be a no-op
     providerA.harvest({"from": strategist})
@@ -88,6 +93,8 @@ def test_operation_swap_a4b(
     vaultB,
     tokenA,
     tokenB,
+    amountA,
+    amountB,
     providerA,
     providerB,
     joint,
@@ -98,10 +105,10 @@ def test_operation_swap_a4b(
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(10 * 1e18, {"from": tokenA_whale})
+    vaultA.deposit(amountA, {"from": tokenA_whale})
 
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(150 * 1e18, {"from": tokenB_whale})
+    vaultB.deposit(amountB, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
@@ -154,7 +161,7 @@ def test_operation_swap_a4b(
     assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
     assert vaultB.strategies(providerB).dict()["totalLoss"] > 0
     assert (
-        pytest.approx(ratios_events[-1]["tokenA"], abs=75)
+        pytest.approx(ratios_events[-1]["tokenA"], abs=125)
         == ratios_events[-1]["tokenB"]
     )
 
@@ -170,6 +177,8 @@ def test_operation_swap_b4a(
     vaultB,
     tokenA,
     tokenB,
+    amountA,
+    amountB,
     providerA,
     providerB,
     joint,
@@ -180,10 +189,10 @@ def test_operation_swap_b4a(
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(10 * 1e18, {"from": tokenA_whale})
+    vaultA.deposit(amountA, {"from": tokenA_whale})
 
     tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(150 * 1e18, {"from": tokenB_whale})
+    vaultB.deposit(amountB, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
@@ -236,7 +245,7 @@ def test_operation_swap_b4a(
     assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
     assert vaultB.strategies(providerB).dict()["totalLoss"] > 0
     assert (
-        pytest.approx(ratios_events[-1]["tokenA"], abs=75)
+        pytest.approx(ratios_events[-1]["tokenA"], abs=125)
         == ratios_events[-1]["tokenB"]
     )
 

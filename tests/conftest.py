@@ -73,6 +73,13 @@ def tokenB_whale(accounts):
 def tokenB(vaultB):
     yield Contract(vaultB.token())
 
+@pytest.fixture
+def amountA(tokenA):
+    yield 150 * 10**tokenA.decimals()
+
+@pytest.fixture
+def amountB(tokenB):
+    yield 15 * 10**tokenB.decimals()
 
 @pytest.fixture
 def weth():
