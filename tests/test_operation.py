@@ -49,7 +49,6 @@ def test_operation(
     assert joint.pendingReward() > 0
     # If joint doesn't reinvest, and providers do not invest want, the want
     # will stay in the providers
-    joint.setReinvest(False, {"from": strategist})
     providerA.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
     providerA.setTakeProfit(True, {"from": strategist})
@@ -147,7 +146,6 @@ def test_operation_swap_a4b(
     assert joint.pendingReward() > 0
     # If joint doesn't reinvest, and providers do not invest want, the want
     # will stay in the providers
-    joint.setReinvest(False, {"from": strategist})
     providerA.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
     providerA.setTakeProfit(True, {"from": strategist})
@@ -231,7 +229,6 @@ def test_operation_swap_b4a(
     assert joint.pendingReward() > 0
     # If joint doesn't reinvest, and providers do not invest want, the want
     # will stay in the providers
-    joint.setReinvest(False, {"from": strategist})
     providerA.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
     providerA.setTakeProfit(True, {"from": strategist})

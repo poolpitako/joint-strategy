@@ -71,7 +71,6 @@ def test_migration(
     assert new_joint.pendingReward() > 0
     # If joint doesn't reinvest, and providers do not invest want, the want
     # will stay in the providers
-    new_joint.setReinvest(False, {"from": strategist})
     new_a.setInvestWant(False, {"from": strategist})
     providerB.setInvestWant(False, {"from": strategist})
     new_a.harvest({"from": strategist})

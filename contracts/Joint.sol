@@ -48,8 +48,6 @@ contract Joint {
     address public tokenA;
     address public tokenB;
 
-    bool public reinvest;
-
     address public WETH;
     address public reward;
     address public router;
@@ -148,7 +146,6 @@ contract Joint {
 
         tokenA = address(providerA.want());
         tokenB = address(providerB.want());
-        reinvest = true;
 
         pair = IUniswapV2Pair(getPair());
 
@@ -202,7 +199,7 @@ contract Joint {
 
     function name() external view virtual returns (string memory) {}
 
-    function prepareReturn() external onlyProviders {
+    function prepareReturn(bool returnFunds) external onlyProviders {
         // If we have previously invested funds, let's distrubute PnL equally in
         // each token's own terms
         if (investedA != 0 && investedB != 0) {
@@ -274,12 +271,12 @@ contract Joint {
 
         investedA = investedB = 0;
 
-        if (!reinvest) {
+        if (returnFunds) {
             _returnLooseToProviders();
         }
     }
 
-    function adjustPosition() external onlyProviders {
+    function adjustPosition(bool reinvest) external onlyProviders {
         // No capital, nothing to do
         if (balanceOfA() == 0 || balanceOfB() == 0) {
             return;
@@ -618,10 +615,6 @@ contract Joint {
     }
 
     function pendingReward() public view virtual returns (uint256) {}
-
-    function setReinvest(bool _reinvest) external onlyAuthorized {
-        reinvest = _reinvest;
-    }
 
     function liquidatePosition() external onlyAuthorized {
         _liquidatePosition();
