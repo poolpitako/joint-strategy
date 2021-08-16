@@ -358,10 +358,9 @@ contract Joint {
         view
         returns (uint256 _balance)
     {
-        require(token == tokenA || token == tokenB);
         if (token == tokenA) {
             (_balance, ) = estimatedTotalAssetsAfterBalance();
-        } else {
+        } else if (token == tokenB) {
             (, _balance) = estimatedTotalAssetsAfterBalance();
         }
     }
