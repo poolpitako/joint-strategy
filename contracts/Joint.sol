@@ -292,9 +292,9 @@ contract Joint {
         (investedA, investedB, ) = createLP();
         depositLP();
 
-	if (balanceOfStake() != 0 || balanceOfPair() !=0) {
-        _returnLooseToProviders();	
-	}
+        if (balanceOfStake() != 0 || balanceOfPair() != 0) {
+            _returnLooseToProviders();
+        }
     }
 
     function estimatedTotalAssetsAfterBalance()
@@ -606,14 +606,10 @@ contract Joint {
     {
         (uint256 reserveA, uint256 reserveB) = getReserves();
         uint256 lpBal = balanceOfStake().add(balanceOfPair());
-        uint256 percentTotal =
-            lpBal.mul(10**uint256(pair.decimals())).div(pair.totalSupply());
-        _balanceA = reserveA.mul(percentTotal).div(
-            10**uint256(pair.decimals())
-        );
-        _balanceB = reserveB.mul(percentTotal).div(
-            10**uint256(pair.decimals())
-        );
+        uint256 pairPrecision = 10**uint256(pair.decimals());
+        uint256 percentTotal = lpBal.mul(pairPrecision).div(pair.totalSupply());
+        _balanceA = reserveA.mul(percentTotal).div(pairPrecision);
+        _balanceB = reserveB.mul(percentTotal).div(pairPrecision);
     }
 
     function pendingReward() public view virtual returns (uint256) {}
