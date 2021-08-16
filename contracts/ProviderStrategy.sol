@@ -22,7 +22,7 @@ interface IERC20Extended {
 interface JointAPI {
     function prepareReturn(bool returnFunds) external;
 
-    function adjustPosition(bool invest) external;
+    function adjustPosition() external;
 
     function providerA() external view returns (address);
 
@@ -174,7 +174,7 @@ contract ProviderStrategy is BaseStrategy {
         if (wantBalance > 0) {
             want.transfer(joint, wantBalance);
         }
-        JointAPI(joint).adjustPosition(investWant);
+        JointAPI(joint).adjustPosition();
     }
 
     function liquidatePosition(uint256 _amountNeeded)

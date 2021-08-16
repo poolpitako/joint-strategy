@@ -276,23 +276,21 @@ contract Joint {
         }
     }
 
-    function adjustPosition(bool reinvest) external onlyProviders {
+    function adjustPosition() external onlyProviders {
         // No capital, nothing to do
         if (balanceOfA() == 0 || balanceOfB() == 0) {
             return;
         }
 
-        if (reinvest) {
-            require(
-                balanceOfStake() == 0 &&
-                    balanceOfPair() == 0 &&
-                    investedA == 0 &&
-                    investedB == 0
-            ); // don't create LP if we are already invested
+        require(
+            balanceOfStake() == 0 &&
+                balanceOfPair() == 0 &&
+                investedA == 0 &&
+                investedB == 0
+        ); // don't create LP if we are already invested
 
-            (investedA, investedB, ) = createLP();
-            depositLP();
-        }
+        (investedA, investedB, ) = createLP();
+        depositLP();
     }
 
     function estimatedTotalAssetsAfterBalance()
