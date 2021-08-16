@@ -291,6 +291,10 @@ contract Joint {
 
         (investedA, investedB, ) = createLP();
         depositLP();
+
+	if (balanceOfStake() != 0 || balanceOfPair() !=0) {
+        _returnLooseToProviders();	
+	}
     }
 
     function estimatedTotalAssetsAfterBalance()

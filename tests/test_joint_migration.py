@@ -47,9 +47,13 @@ def test_joint_migration(
 
 
 def test_joint_clone_migration(
-    gov, strategist, weth, joint, providerA, providerB, SushiJoint
+    chain, gov, strategist, weth, joint, providerA, providerB, SushiJoint
 ):
     old_joint = joint
+
+    chain.sleep(1)
+    chain.mine()
+
     providerA.harvest({"from": gov})
     providerB.harvest({"from": gov})
     old_joint.liquidatePosition({"from": gov})
