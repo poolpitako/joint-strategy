@@ -470,6 +470,8 @@ contract Joint {
             uint256
         )
     {
+        // **WARNING**: This call is sandwichable, care should be taken
+        //              to always execute with a private relay
         return
             IUniswapV2Router02(router).addLiquidity(
                 tokenA,
@@ -560,6 +562,8 @@ contract Joint {
         if (balanceOfPair() == 0) {
             return (0, 0);
         }
+        // **WARNING**: This call is sandwichable, care should be taken
+        //              to always execute with a private relay
         return
             IUniswapV2Router02(router).removeLiquidity(
                 tokenA,
