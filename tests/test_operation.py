@@ -39,8 +39,8 @@ def test_operation(
     )
 
     # Wait plz
-    chain.sleep(3600 * 1)
-    chain.mine(int(3600 / 13))
+    chain.sleep(3600 * 4)
+    chain.mine(int(3600 / 13) * 4)
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} eth and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} yfi"

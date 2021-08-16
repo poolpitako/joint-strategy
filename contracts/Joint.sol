@@ -392,16 +392,34 @@ contract Joint {
         if (ratioA > ratioB) {
             _sellToken = tokenA;
             precision = 10**uint256(IERC20Extended(tokenA).decimals());
-            (, exchangeRate) = getSpotExchangeRates();
             numerator = currentA.sub(startingA.mul(currentB).div(startingB));
+            uint256 approxSellAmount =
+                numerator.mul(precision).div(
+                    precision +
+                        startingA
+                            .mul(getExchangeRate(tokenA, tokenB, precision))
+                            .div(startingB)
+                );
+            exchangeRate = getExchangeRate(tokenA, tokenB, approxSellAmount)
+                .mul(precision)
+                .div(approxSellAmount);
             denominator =
                 precision +
                 startingA.mul(exchangeRate).div(startingB);
         } else {
             _sellToken = tokenB;
             precision = 10**uint256(IERC20Extended(tokenB).decimals());
-            (exchangeRate, ) = getSpotExchangeRates();
             numerator = currentB.sub(startingB.mul(currentA).div(startingA));
+            uint256 approxSellAmount =
+                numerator.mul(precision).div(
+                    precision +
+                        startingB
+                            .mul(getExchangeRate(tokenB, tokenA, precision))
+                            .div(startingA)
+                );
+            exchangeRate = getExchangeRate(tokenB, tokenA, approxSellAmount)
+                .mul(precision)
+                .div(approxSellAmount);
             denominator =
                 precision +
                 startingB.mul(exchangeRate).div(startingA);
@@ -419,24 +437,17 @@ contract Joint {
         _b = currentB.mul(RATIO_PRECISION).div(startingB);
     }
 
-    function getSpotExchangeRates()
-        public
-        view
-        returns (uint256 _AForB, uint256 _BForA)
-    {
-        (uint256 reserveA, uint256 reserveB) = getReserves();
-
-        uint256 tokenAPrecision =
-            10**uint256(IERC20Extended(tokenA).decimals());
-        uint256 tokenBPrecision =
-            10**uint256(IERC20Extended(tokenB).decimals());
-
-        _AForB = (reserveA.mul(tokenAPrecision).div(reserveB)).mul(997).div(
-            1000
-        );
-        _BForA = (reserveB.mul(tokenBPrecision).div(reserveA)).mul(997).div(
-            1000
-        );
+    function getExchangeRate(
+        address _in,
+        address _out,
+        uint256 _amountIn
+    ) internal view returns (uint256) {
+        uint256[] memory amountsOut =
+            IUniswapV2Router02(router).getAmountsOut(
+                _amountIn,
+                getTokenOutPath(_in, _out)
+            );
+        return amountsOut[amountsOut.length - 1];
     }
 
     function getReserves()
