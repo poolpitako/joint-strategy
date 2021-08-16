@@ -1,6 +1,7 @@
 import brownie
 import pytest
 from brownie import Contract, Wei
+from operator import xor
 
 
 def test_operation(
@@ -28,7 +29,7 @@ def test_operation(
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
+    assert xor(providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0)
 
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
@@ -111,7 +112,7 @@ def test_operation_swap_a4b(
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
+    assert xor(providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0)
 
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
@@ -194,7 +195,7 @@ def test_operation_swap_b4a(
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
+    assert xor(providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0)
 
     print(f"Joint has {joint.balanceOfA()/1e18} eth and {joint.balanceOfB()/1e18} yfi")
     assert joint.balanceOfStake() > 0
