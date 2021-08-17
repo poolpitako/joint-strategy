@@ -249,7 +249,6 @@ contract Joint {
                         sellToken == tokenA ? tokenB : tokenA,
                         sellAmount
                     );
-                emit SellToBalance(sellToken, sellAmount, buyAmount);
 
                 if (sellToken == tokenA) {
                     currentA = currentA.sub(sellAmount);
@@ -366,11 +365,6 @@ contract Joint {
     }
 
     event Ratios(uint256 tokenA, uint256 tokenB, string description);
-    event SellToBalance(
-        address sellToken,
-        uint256 sellAmount,
-        uint256 buyAmount
-    );
 
     function calculateSellToBalance(
         uint256 currentA,
