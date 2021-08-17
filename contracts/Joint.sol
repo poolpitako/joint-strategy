@@ -416,23 +416,26 @@ contract Joint {
         uint256 reserves0,
         uint256 reserves1,
         uint256 precision
-    ) internal pure returns (uint256) {
+    ) internal pure returns (uint256 _sellAmount) {
         uint256 numerator =
             current0.sub(starting0.mul(current1).div(starting1)).mul(precision);
-        uint256 approxSellAmount =
-            numerator.div(
-                precision +
-                    starting0
-                        .mul(getExchangeRate(precision, reserves0, reserves1))
-                        .div(starting1)
-            );
-        uint256 exchangeRate =
-            getExchangeRate(approxSellAmount, reserves0, reserves1)
-                .mul(precision)
-                .div(approxSellAmount);
-        uint256 denominator =
+        uint256 denominator;
+        uint256 exchangeRate;
+
+        // First time to approximate
+        exchangeRate = UniswapV2Library.getAmountOut(precision, reserves0, reserves1);
+        denominator =
             precision + starting0.mul(exchangeRate).div(starting1);
-        return numerator.div(denominator);
+        _sellAmount = numerator.div(denominator);
+
+        // Second time to account for slippage
+        exchangeRate =
+            UniswapV2Library.getAmountOut(_sellAmount, reserves0, reserves1)
+                .mul(precision)
+                .div(_sellAmount);
+        denominator =
+            precision + starting0.mul(exchangeRate).div(starting1);
+        _sellAmount = numerator.div(denominator);
     }
 
     function getRatios(
@@ -443,15 +446,6 @@ contract Joint {
     ) internal pure returns (uint256 _a, uint256 _b) {
         _a = currentA.mul(RATIO_PRECISION).div(startingA);
         _b = currentB.mul(RATIO_PRECISION).div(startingB);
-    }
-
-    function getExchangeRate(
-        uint256 _amountIn,
-        uint256 _reservesIn,
-        uint256 _reservesOut
-    ) internal pure returns (uint256) {
-        return
-            UniswapV2Library.getAmountOut(_amountIn, _reservesIn, _reservesOut);
     }
 
     function getReserves()
@@ -647,5 +641,16 @@ contract Joint {
     ) external onlyGovernance returns (uint256) {
         require(swapTo == tokenA || swapTo == tokenB); // swapTo must be tokenA or tokenB
         return sellCapital(swapFrom, swapTo, swapInAmount);
+    }
+
+    function sweep(address _token) external onlyGovernance {
+        require(_token != address(tokenA));
+        require(_token != address(tokenB));
+
+        SafeERC20.safeTransfer(
+            IERC20(_token),
+            providerA.vault().governance(),
+            IERC20(_token).balanceOf(address(this))
+        );
     }
 }
