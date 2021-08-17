@@ -46,6 +46,7 @@ def attacker(accounts):
 def tokenA(vaultA):
     yield Contract(vaultA.token())
 
+
 @pytest.fixture
 def tokenB(vaultB):
     yield Contract(vaultB.token())
@@ -72,9 +73,11 @@ def tokenA_whale(accounts):
 def tokenB_whale(accounts):
     yield accounts.at("0x3ff33d9162aD47660083D7DC4bC02Fb231c81677", force=True)
 
+
 @pytest.fixture
 def sushi_whale(accounts):
     yield accounts.at("0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272", force=True)
+
 
 @pytest.fixture
 def amountA(tokenA):

@@ -229,7 +229,8 @@ contract ProviderStrategy is BaseStrategy {
         override
         returns (uint256 _amountFreed)
     {
-        return _amountFreed;
+        JointAPI(joint).prepareReturn(true);
+        _amountFreed = balanceOfWant();
     }
 
     function ethToWant(uint256 _amtInWei)
