@@ -15,6 +15,8 @@ import "../interfaces/uni/IUniswapV2Factory.sol";
 import "../interfaces/uni/IUniswapV2Pair.sol";
 import "../interfaces/IMasterChef.sol";
 
+import "./libraries/UniswapV2Library.sol";
+
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
 
 interface IERC20Extended {
@@ -379,46 +381,58 @@ contract Joint {
 
         if (ratioA == ratioB) return (address(0), 0);
 
-        uint256 numerator;
-        uint256 denominator;
-        uint256 precision;
-        uint256 exchangeRate;
+        (uint256 reserveA, uint256 reserveB) = getReserves();
+
         if (ratioA > ratioB) {
             _sellToken = tokenA;
-            precision = 10**uint256(IERC20Extended(tokenA).decimals());
-            numerator = currentA.sub(startingA.mul(currentB).div(startingB));
-            uint256 approxSellAmount =
-                numerator.mul(precision).div(
-                    precision +
-                        startingA
-                            .mul(getExchangeRate(tokenA, tokenB, precision))
-                            .div(startingB)
-                );
-            exchangeRate = getExchangeRate(tokenA, tokenB, approxSellAmount)
-                .mul(precision)
-                .div(approxSellAmount);
-            denominator =
-                precision +
-                startingA.mul(exchangeRate).div(startingB);
+            _sellAmount = _calculateSellToBalance(
+                currentA,
+                currentB,
+                startingA,
+                startingB,
+                reserveA,
+                reserveB,
+                10**uint256(IERC20Extended(tokenA).decimals())
+            );
         } else {
             _sellToken = tokenB;
-            precision = 10**uint256(IERC20Extended(tokenB).decimals());
-            numerator = currentB.sub(startingB.mul(currentA).div(startingA));
-            uint256 approxSellAmount =
-                numerator.mul(precision).div(
-                    precision +
-                        startingB
-                            .mul(getExchangeRate(tokenB, tokenA, precision))
-                            .div(startingA)
-                );
-            exchangeRate = getExchangeRate(tokenB, tokenA, approxSellAmount)
+            _sellAmount = _calculateSellToBalance(
+                currentB,
+                currentA,
+                startingB,
+                startingA,
+                reserveB,
+                reserveA,
+                10**uint256(IERC20Extended(tokenB).decimals())
+            );
+        }
+    }
+
+    function _calculateSellToBalance(
+        uint256 current0,
+        uint256 current1,
+        uint256 starting0,
+        uint256 starting1,
+        uint256 reserves0,
+        uint256 reserves1,
+        uint256 precision
+    ) internal pure returns (uint256) {
+        uint256 numerator =
+            current0.sub(starting0.mul(current1).div(starting1)).mul(precision);
+        uint256 approxSellAmount =
+            numerator.div(
+                precision +
+                    starting0
+                        .mul(getExchangeRate(precision, reserves0, reserves1))
+                        .div(starting1)
+            );
+        uint256 exchangeRate =
+            getExchangeRate(approxSellAmount, reserves0, reserves1)
                 .mul(precision)
                 .div(approxSellAmount);
-            denominator =
-                precision +
-                startingB.mul(exchangeRate).div(startingA);
-        }
-        _sellAmount = numerator.mul(precision).div(denominator);
+        uint256 denominator =
+            precision + starting0.mul(exchangeRate).div(starting1);
+        return numerator.div(denominator);
     }
 
     function getRatios(
@@ -432,16 +446,12 @@ contract Joint {
     }
 
     function getExchangeRate(
-        address _in,
-        address _out,
-        uint256 _amountIn
-    ) internal view returns (uint256) {
-        uint256[] memory amountsOut =
-            IUniswapV2Router02(router).getAmountsOut(
-                _amountIn,
-                getTokenOutPath(_in, _out)
-            );
-        return amountsOut[amountsOut.length - 1];
+        uint256 _amountIn,
+        uint256 _reservesIn,
+        uint256 _reservesOut
+    ) internal pure returns (uint256) {
+        return
+            UniswapV2Library.getAmountOut(_amountIn, _reservesIn, _reservesOut);
     }
 
     function getReserves()
