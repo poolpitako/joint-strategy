@@ -234,8 +234,6 @@ contract Joint {
             (uint256 ratioA, uint256 ratioB) =
                 getRatios(currentA, currentB, investedA, investedB);
 
-            emit Ratios(ratioA, ratioB, "before balance");
-
             (address sellToken, uint256 sellAmount) =
                 calculateSellToBalance(
                     currentA,
@@ -266,7 +264,6 @@ contract Joint {
                     investedA,
                     investedB
                 );
-                emit Ratios(ratioA, ratioB, "after balance");
             }
         }
 
@@ -357,8 +354,6 @@ contract Joint {
             (, _balance) = estimatedTotalAssetsAfterBalance();
         }
     }
-
-    event Ratios(uint256 tokenA, uint256 tokenB, string description);
 
     function calculateSellToBalance(
         uint256 currentA,
