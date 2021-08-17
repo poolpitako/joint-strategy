@@ -413,8 +413,8 @@ contract Joint {
         uint256 current1,
         uint256 starting0,
         uint256 starting1,
-        uint256 reserves0,
-        uint256 reserves1,
+        uint256 reserve0,
+        uint256 reserve1,
         uint256 precision
     ) internal pure returns (uint256 _sellAmount) {
         uint256 numerator =
@@ -423,14 +423,14 @@ contract Joint {
         uint256 exchangeRate;
 
         // First time to approximate
-        exchangeRate = UniswapV2Library.getAmountOut(precision, reserves0, reserves1);
+        exchangeRate = UniswapV2Library.getAmountOut(precision, reserve0, reserve1);
         denominator =
             precision + starting0.mul(exchangeRate).div(starting1);
         _sellAmount = numerator.div(denominator);
 
         // Second time to account for slippage
         exchangeRate =
-            UniswapV2Library.getAmountOut(_sellAmount, reserves0, reserves1)
+            UniswapV2Library.getAmountOut(_sellAmount, reserve0, reserve1)
                 .mul(precision)
                 .div(_sellAmount);
         denominator =
