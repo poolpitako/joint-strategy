@@ -205,29 +205,16 @@ contract Joint {
         // If we have previously invested funds, let's distrubute PnL equally in
         // each token's own terms
         if (investedA != 0 && investedB != 0) {
-            // Track starting amount in case reward is one of LP tokens
-            uint256 startingRewardBal = balanceOfReward();
-
-            if (balanceOfStake() != 0) {
-                getReward();
-            }
-
-            uint256 rewardAmount = balanceOfReward().sub(startingRewardBal);
-
             // Liquidate will also claim rewards
             (uint256 currentA, uint256 currentB) = _liquidatePosition();
 
-            if (tokenA == reward) {
-                currentA = currentA.add(rewardAmount);
-            } else if (tokenB == reward) {
-                currentB = currentB.add(rewardAmount);
-            } else {
-                (address rewardSwappedTo, uint256 rewardSwapAmount) =
-                    swapReward(balanceOfReward().sub(startingRewardBal));
+            if (tokenA != reward && tokenB != reward) {
+                (address rewardSwappedTo, uint256 rewardSwapOutAmount) =
+                    swapReward(balanceOfReward());
                 if (rewardSwappedTo == tokenA) {
-                    currentA = currentA.add(rewardSwapAmount);
+                    currentA = currentA.add(rewardSwapOutAmount);
                 } else if (rewardSwappedTo == tokenB) {
-                    currentB = currentB.add(rewardSwapAmount);
+                    currentB = currentB.add(rewardSwapOutAmount);
                 }
             }
 
@@ -304,6 +291,9 @@ contract Joint {
 
         (_aBalance, _bBalance) = balanceOfTokensInLP();
 
+        _aBalance = _aBalance.add(balanceOfA());
+        _bBalance = _bBalance.add(balanceOfB());
+
         if (reward == tokenA) {
             _aBalance = _aBalance.add(rewardsPending);
         } else if (reward == tokenB) {
@@ -338,9 +328,6 @@ contract Joint {
             _bBalance = _bBalance.sub(sellAmount);
             _aBalance = _aBalance.add(buyAmount);
         }
-
-        _aBalance = _aBalance.add(balanceOfA());
-        _bBalance = _bBalance.add(balanceOfB());
     }
 
     function estimatedTotalAssetsInToken(address token)
@@ -551,7 +538,6 @@ contract Joint {
         }
         // **WARNING**: This call is sandwichable, care should be taken
         //              to always execute with a private relay
-        return
             IUniswapV2Router02(router).removeLiquidity(
                 tokenA,
                 tokenB,
@@ -561,6 +547,7 @@ contract Joint {
                 address(this),
                 now
             );
+        return (balanceOfA(), balanceOfB());
     }
 
     function _returnLooseToProviders() internal {
