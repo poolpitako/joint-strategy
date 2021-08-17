@@ -102,10 +102,10 @@ def mc_pid():
 
 @pytest.fixture
 def joint(gov, providerA, providerB, BooJoint, router, masterchef, boo, weth, mc_pid):
-    joint = Contract("0x327025a6Cb4A4b61071B53066087252B779BF8B0")
-    # joint = gov.deploy(
-    #    BooJoint, providerA, providerB, router, weth, masterchef, boo, mc_pid
-    # )
+    # joint = Contract("0x327025a6Cb4A4b61071B53066087252B779BF8B0")
+    joint = gov.deploy(
+        BooJoint, providerA, providerB, router, weth, masterchef, boo, mc_pid
+    )
 
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})
@@ -114,11 +114,11 @@ def joint(gov, providerA, providerB, BooJoint, router, masterchef, boo, weth, mc
 
 
 @pytest.fixture
-def providerA(gov, vaultA, ProviderStrategy):
-    strategy = Contract("0x51DaA92f3E1F6F39924aF796c9f63c1d35A52386")
-    # strategy = strategist.deploy(ProviderStrategy, vaultA)
-    # strategy.setKeeper(keeper, {"from": gov})
-    # strategy.setStrategist(strategist, {"from": gov})
+def providerA(gov, strategist, keeper, vaultA, ProviderStrategy):
+    # strategy = Contract("0x51DaA92f3E1F6F39924aF796c9f63c1d35A52386")
+    strategy = strategist.deploy(ProviderStrategy, vaultA)
+    strategy.setKeeper(keeper, {"from": gov})
+    strategy.setStrategist(strategist, {"from": gov})
 
     # free up some debt ratio space
     vaultA.revokeStrategy("0x8F43b5CeD3e892dBb3951694D80cB6E4313F2F58", {"from": gov})
@@ -130,11 +130,11 @@ def providerA(gov, vaultA, ProviderStrategy):
 
 
 @pytest.fixture
-def providerB(gov, vaultB, ProviderStrategy):
-    strategy = Contract("0x61b7e35Ec9EA46DbdC0F7A85355F1025048C3E60")
-    # strategy = strategist.deploy(ProviderStrategy, vaultB)
-    # strategy.setKeeper(keeper, {"from": gov})
-    # strategy.setStrategist(strategist, {"from": gov})
+def providerB(gov, strategist, keeper, vaultB, ProviderStrategy):
+    # strategy = Contract("0x61b7e35Ec9EA46DbdC0F7A85355F1025048C3E60")
+    strategy = strategist.deploy(ProviderStrategy, vaultB)
+    strategy.setKeeper(keeper, {"from": gov})
+    strategy.setStrategist(strategist, {"from": gov})
 
     # free up some debt ratio space
     vaultB.revokeStrategy("0xf8c08cE855D1ABA492202ecf47eaa3d2a7DE2eC5", {"from": gov})

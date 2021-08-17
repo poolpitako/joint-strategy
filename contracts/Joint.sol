@@ -15,7 +15,7 @@ import "../interfaces/uni/IUniswapV2Factory.sol";
 import "../interfaces/uni/IUniswapV2Pair.sol";
 import "../interfaces/IMasterChef.sol";
 
-import "./libraries/UniswapV2Library.sol";
+import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
 
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
 
@@ -332,20 +332,12 @@ contract Joint {
 
         if (sellToken == tokenA) {
             uint256 buyAmount =
-                IUniswapV2Router02(router).getAmountOut(
-                    sellAmount,
-                    reserveA,
-                    reserveB
-                );
+                UniswapV2Library.getAmountOut(sellAmount, reserveA, reserveB);
             _aBalance = _aBalance.sub(sellAmount);
             _bBalance = _bBalance.add(buyAmount);
         } else if (sellToken == tokenB) {
             uint256 buyAmount =
-                IUniswapV2Router02(router).getAmountOut(
-                    sellAmount,
-                    reserveB,
-                    reserveA
-                );
+                UniswapV2Library.getAmountOut(sellAmount, reserveB, reserveA);
             _bBalance = _bBalance.sub(sellAmount);
             _aBalance = _aBalance.add(buyAmount);
         }
@@ -423,18 +415,20 @@ contract Joint {
         uint256 exchangeRate;
 
         // First time to approximate
-        exchangeRate = UniswapV2Library.getAmountOut(precision, reserve0, reserve1);
-        denominator =
-            precision + starting0.mul(exchangeRate).div(starting1);
+        exchangeRate = UniswapV2Library.getAmountOut(
+            precision,
+            reserve0,
+            reserve1
+        );
+        denominator = precision + starting0.mul(exchangeRate).div(starting1);
         _sellAmount = numerator.div(denominator);
 
         // Second time to account for slippage
-        exchangeRate =
-            UniswapV2Library.getAmountOut(_sellAmount, reserve0, reserve1)
-                .mul(precision)
-                .div(_sellAmount);
-        denominator =
-            precision + starting0.mul(exchangeRate).div(starting1);
+        exchangeRate = UniswapV2Library
+            .getAmountOut(_sellAmount, reserve0, reserve1)
+            .mul(precision)
+            .div(_sellAmount);
+        denominator = precision + starting0.mul(exchangeRate).div(starting1);
         _sellAmount = numerator.div(denominator);
     }
 

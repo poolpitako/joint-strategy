@@ -1,6 +1,7 @@
 import brownie
 import pytest
 from brownie import Contract, Wei
+from operator import xor
 
 
 @pytest.mark.require_network("ftm-main-fork")
@@ -28,15 +29,15 @@ def test_operation(
     vaultB.deposit(tokenB_amount, {"from": tokenB_whale})
 
     providerA.harvest({"from": strategist})
-    print(f"Joint has {joint.balanceOfA()/1e18} boo and {joint.balanceOfB()/1e18} wftm")
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
 
-    print(f"Joint has {joint.balanceOfA()/1e18} boo and {joint.balanceOfB()/1e18} wftm")
+    assert xor(providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0)
+    assert joint.balanceOfA() == 0
+    assert joint.balanceOfB() == 0
     assert joint.balanceOfStake() > 0
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     # Wait plz
@@ -44,7 +45,7 @@ def test_operation(
     chain.mine(int(3600 / 13) * 10)
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     # If there is any profit it should go to the providers
@@ -83,8 +84,12 @@ def test_operation(
     assert vaultA.pricePerShare() > 1e18
     assert vaultB.pricePerShare() > 1e18
 
-    print(f"boo profit: {vaultA.strategies(providerA).dict()['totalGain']/1e18} boo")
-    print(f"wftm profit: {vaultB.strategies(providerB).dict()['totalGain']/1e18} wftm")
+    print(
+        f"{tokenA.symbol()} profit: {vaultA.strategies(providerA).dict()['totalGain']/1e18} {tokenA.symbol()}"
+    )
+    print(
+        f"{tokenB.symbol()} profit: {vaultB.strategies(providerB).dict()['totalGain']/1e18} {tokenB.symbol()}"
+    )
 
 
 @pytest.mark.require_network("ftm-main-fork")
@@ -113,13 +118,14 @@ def test_operation_swap_a4b(
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
 
-    print(f"Joint has {joint.balanceOfA()/1e18} boo and {joint.balanceOfB()/1e18} wftm")
+    assert xor(providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0)
+    assert joint.balanceOfA() == 0
+    assert joint.balanceOfB() == 0
     assert joint.balanceOfStake() > 0
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
@@ -133,7 +139,7 @@ def test_operation_swap_a4b(
     )
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     # Wait plz
@@ -141,7 +147,7 @@ def test_operation_swap_a4b(
     chain.mine(int(3600 / 13))
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     # If there is any profit it should go to the providers
@@ -167,8 +173,12 @@ def test_operation_swap_a4b(
 
     print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
     print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
-    print(f"boo loss: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} boo")
-    print(f"wftm loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} wftm")
+    print(
+        f"{tokenA.symbol()} loss: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} {tokenA.symbol()}"
+    )
+    print(
+        f"{tokenB.symbol()} loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} {tokenB.symbol()}"
+    )
 
 
 @pytest.mark.require_network("ftm-main-fork")
@@ -197,13 +207,14 @@ def test_operation_swap_b4a(
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() > 0 or joint.balanceOfB() > 0
 
-    print(f"Joint has {joint.balanceOfA()/1e18} boo and {joint.balanceOfB()/1e18} wftm")
+    assert xor(providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0)
+    assert joint.balanceOfA() == 0
+    assert joint.balanceOfB() == 0
     assert joint.balanceOfStake() > 0
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
@@ -217,7 +228,7 @@ def test_operation_swap_b4a(
     )
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     # Wait plz
@@ -225,7 +236,7 @@ def test_operation_swap_b4a(
     chain.mine(int(3600 / 13))
 
     print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} boo and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} wftm"
+        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
     )
 
     # If there is any profit it should go to the providers
@@ -251,5 +262,9 @@ def test_operation_swap_b4a(
 
     print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
     print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
-    print(f"boo loss: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} boo")
-    print(f"wftm loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} wftm")
+    print(
+        f"{tokenA.symbol()} loss: {vaultA.strategies(providerA).dict()['totalLoss']/1e18} {tokenA.symbol()}"
+    )
+    print(
+        f"{tokenB.symbol()} loss: {vaultB.strategies(providerB).dict()['totalLoss']/1e18} {tokenB.symbol()}"
+    )
