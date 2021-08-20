@@ -37,7 +37,7 @@ interface ProviderStrategy {
     function want() external view returns (address);
 }
 
-contract Joint {
+abstract contract Joint {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
