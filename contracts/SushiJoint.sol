@@ -33,6 +33,7 @@ contract SushiJoint is Joint {
         )
     {}
 
+    // review I would move name to a clone parameter.
     function name() external view override returns (string memory) {
         string memory ab =
             string(

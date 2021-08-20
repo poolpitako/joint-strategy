@@ -19,6 +19,8 @@ import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
 
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
 
+// review: You are using this in both, the Joint and the Provider.
+// Move to a separate file.
 interface IERC20Extended {
     function decimals() external view returns (uint8);
 
@@ -37,11 +39,13 @@ interface ProviderStrategy {
     function want() external view returns (address);
 }
 
+//review make abstract?
 contract Joint {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
+    // review: interesting, mono is using internal instead of private. not sure what's the diff.
     uint256 private constant RATIO_PRECISION = 1e4;
 
     ProviderStrategy public providerA;
@@ -154,6 +158,8 @@ contract Joint {
         IERC20(address(pair)).approve(address(masterchef), type(uint256).max);
         IERC20(tokenA).approve(address(router), type(uint256).max);
         IERC20(tokenB).approve(address(router), type(uint256).max);
+
+        // review if (reward != tokenA and reward!= tokenB) {}
         IERC20(reward).approve(address(router), type(uint256).max);
         IERC20(address(pair)).approve(address(router), type(uint256).max);
     }
@@ -274,6 +280,7 @@ contract Joint {
                 investedB == 0
         ); // don't create LP if we are already invested
 
+        // review: createLP is only used here. can we make it return 2 values instead of 3?
         (investedA, investedB, ) = createLP();
         depositLP();
 
@@ -496,7 +503,9 @@ contract Joint {
     }
 
     function depositLP() internal {
-        if (balanceOfPair() > 0) masterchef.deposit(pid, balanceOfPair());
+        if (balanceOfPair() > 0) {
+            masterchef.deposit(pid, balanceOfPair());
+        }
     }
 
     function swapReward(uint256 _rewardBal)
@@ -538,15 +547,15 @@ contract Joint {
         }
         // **WARNING**: This call is sandwichable, care should be taken
         //              to always execute with a private relay
-            IUniswapV2Router02(router).removeLiquidity(
-                tokenA,
-                tokenB,
-                balanceOfPair(),
-                0,
-                0,
-                address(this),
-                now
-            );
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
         return (balanceOfA(), balanceOfB());
     }
 
@@ -600,6 +609,7 @@ contract Joint {
         _balanceB = reserveB.mul(percentTotal).div(pairPrecision);
     }
 
+    // review abstract to avoid empty methods
     function pendingReward() public view virtual returns (uint256) {}
 
     function liquidatePosition() external onlyAuthorized {

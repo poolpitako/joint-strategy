@@ -40,7 +40,7 @@ contract ProviderStrategy is BaseStrategy {
     using SafeMath for uint256;
 
     address public joint;
-    bool public takeProfit;
+    bool public takeProfit; // false by default
     bool public investWant;
 
     constructor(address _vault) public BaseStrategy(_vault) {
@@ -59,7 +59,6 @@ contract ProviderStrategy is BaseStrategy {
 
     function _initializeStrat() internal {
         investWant = true;
-        takeProfit = false;
     }
 
     event Cloned(address indexed clone);
@@ -97,6 +96,7 @@ contract ProviderStrategy is BaseStrategy {
         emit Cloned(newStrategy);
     }
 
+    // review: I would move this method to the clone and use an internal string in storage.
     function name() external view override returns (string memory) {
         return
             string(
@@ -112,6 +112,8 @@ contract ProviderStrategy is BaseStrategy {
     function estimatedTotalAssets() public view override returns (uint256) {
         return
             want.balanceOf(address(this)).add(
+                // review: wouldn't be more accurate to do total assets in the joint / 2
+                // Because if there is less from one side, we would balance it.
                 JointAPI(joint).estimatedTotalAssetsInToken(address(want))
             );
     }
@@ -182,6 +184,7 @@ contract ProviderStrategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
+        // review: should we revert if there are assets in the joint when liquidatePosition is called?
         uint256 totalAssets = want.balanceOf(address(this));
         if (_amountNeeded > totalAssets) {
             _liquidatedAmount = totalAssets;
