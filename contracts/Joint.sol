@@ -405,7 +405,7 @@ abstract contract Joint {
         denominator = precision + starting0.mul(exchangeRate).div(starting1);
         _sellAmount = numerator.div(denominator);
 
-        // Second time to account for slippage
+        // Second time to account for price impact
         exchangeRate = UniswapV2Library
             .getAmountOut(_sellAmount, reserve0, reserve1)
             .mul(precision)
