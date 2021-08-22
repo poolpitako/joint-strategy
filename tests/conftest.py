@@ -134,7 +134,7 @@ def providerA(gov, strategist, keeper, vaultA, ProviderStrategy):
     strategy = strategist.deploy(ProviderStrategy, vaultA)
     strategy.setKeeper(keeper)
 
-    vaultA.addStrategy(strategy, 1900, 0, 2 ** 256 - 1, 1_000, {"from": gov})
+    vaultA.addStrategy(strategy, 900, 0, 2 ** 256 - 1, 1_000, {"from": gov})
 
     yield strategy
 
