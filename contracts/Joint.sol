@@ -9,7 +9,7 @@ import {
     Address
 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
-
+import "./LPHedgingLib.sol";
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
 import "../interfaces/uni/IUniswapV2Pair.sol";
@@ -63,12 +63,14 @@ abstract contract Joint {
     uint256 private investedA;
     uint256 private investedB;
 
+    uint256 public h = 1_000; // 10%
+    uint256 public period = 10 days;
+    
     modifier onlyGovernance {
         require(
             msg.sender == providerA.vault().governance() ||
                 msg.sender == providerB.vault().governance()
         );
-        _;
     }
 
     modifier onlyAuthorized {
@@ -275,6 +277,7 @@ abstract contract Joint {
         ); // don't create LP if we are already invested
 
         (investedA, investedB, ) = createLP();
+        hedgeLP();
         depositLP();
 
         if (balanceOfStake() != 0 || balanceOfPair() != 0) {
@@ -341,6 +344,14 @@ abstract contract Joint {
             (, _balance) = estimatedTotalAssetsAfterBalance();
         }
     }
+
+    function hedgeLP() internal {
+        IERC20 _pair = getPair();
+        // TODO: sell options if they are active
+        require(activeCallID == 0 && activePutID == 0);
+        (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(address(_pair), _pair.balanceOf(address(this)), h, period);
+    }
+
 
     function calculateSellToBalance(
         uint256 currentA,
@@ -532,7 +543,11 @@ abstract contract Joint {
     function _liquidatePosition() internal returns (uint256, uint256) {
         if (balanceOfStake() != 0) {
             masterchef.withdraw(pid, balanceOfStake());
+            LPHedgingLib.closeHedge(callID, putID);
+            activeCallID = 0;
+            activePutID = 0;
         }
+
         if (balanceOfPair() == 0) {
             return (0, 0);
         }
