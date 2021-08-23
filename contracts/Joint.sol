@@ -55,6 +55,8 @@ abstract contract Joint {
     uint256 private investedA;
     uint256 private investedB;
 
+    // HEDGING
+    uint256 public hedgeBudget = 100; // 1%
     uint256 private activeCallID;
     uint256 private activePutID;
 
@@ -457,8 +459,8 @@ abstract contract Joint {
             IUniswapV2Router02(router).addLiquidity(
                 tokenA,
                 tokenB,
-                balanceOfA(),
-                balanceOfB(),
+                balanceOfA().mul(hedgeBudget).div(MAX_BPS),
+                balanceOfB().mul(hedgeBudget).div(MAX_BPS),
                 0,
                 0,
                 address(this),
@@ -619,6 +621,11 @@ abstract contract Joint {
 
     function returnLooseToProviders() external onlyAuthorized {
         _returnLooseToProviders();
+    }
+
+    function setHedgeBudget(uint256 _hedgeBudget) external onlyAuthorized{
+        // TODO: consider adding a max? ruggable? 
+        hedgeBudget = _hedgeBudget;
     }
 
     function swapTokenForToken(
