@@ -539,25 +539,25 @@ abstract contract Joint {
     function _liquidatePosition() internal returns (uint256, uint256) {
         if (balanceOfStake() != 0) {
             masterchef.withdraw(pid, balanceOfStake());
-            LPHedgingLib.closeHedge(activeCallID, activePutID);
-            activeCallID = 0;
-            activePutID = 0;
         }
 
         if (balanceOfPair() == 0) {
             return (0, 0);
         }
+        LPHedgingLib.closeHedge(activeCallID, activePutID);
+        activeCallID = 0;
+        activePutID = 0;
         // **WARNING**: This call is sandwichable, care should be taken
         //              to always execute with a private relay
-            IUniswapV2Router02(router).removeLiquidity(
-                tokenA,
-                tokenB,
-                balanceOfPair(),
-                0,
-                0,
-                address(this),
-                now
-            );
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
         return (balanceOfA(), balanceOfB());
     }
 
