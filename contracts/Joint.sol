@@ -19,14 +19,6 @@ import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
 
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
 
-interface IERC20Extended {
-    function decimals() external view returns (uint8);
-
-    function name() external view returns (string memory);
-
-    function symbol() external view returns (string memory);
-}
-
 interface ProviderStrategy {
     function vault() external view returns (VaultAPI);
 
@@ -63,14 +55,18 @@ abstract contract Joint {
     uint256 private investedA;
     uint256 private investedB;
 
-    uint256 public h = 1_000; // 10%
-    uint256 public period = 10 days;
+    uint256 private activeCallID;
+    uint256 private activePutID;
+
+    uint256 private h = 1_000; // 10%
+    uint256 private period = 10 days;
     
     modifier onlyGovernance {
         require(
             msg.sender == providerA.vault().governance() ||
                 msg.sender == providerB.vault().governance()
         );
+        _;
     }
 
     modifier onlyAuthorized {
@@ -346,7 +342,7 @@ abstract contract Joint {
     }
 
     function hedgeLP() internal {
-        IERC20 _pair = getPair();
+        IERC20 _pair = IERC20(getPair();
         // TODO: sell options if they are active
         require(activeCallID == 0 && activePutID == 0);
         (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(address(_pair), _pair.balanceOf(address(this)), h, period);
@@ -543,7 +539,7 @@ abstract contract Joint {
     function _liquidatePosition() internal returns (uint256, uint256) {
         if (balanceOfStake() != 0) {
             masterchef.withdraw(pid, balanceOfStake());
-            LPHedgingLib.closeHedge(callID, putID);
+            LPHedgingLib.closeHedge(activeCallID, activePutID);
             activeCallID = 0;
             activePutID = 0;
         }
