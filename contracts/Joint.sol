@@ -56,12 +56,12 @@ abstract contract Joint {
     uint256 private investedB;
 
     // HEDGING
-    uint256 public hedgeBudget = 100; // 1%
-    uint256 private activeCallID;
-    uint256 private activePutID;
+    uint256 public hedgeBudget = 50; // 0.5% per hedging period
+    uint256 public activeCallID;
+    uint256 public activePutID;
 
-    uint256 private h = 1_000; // 10%
-    uint256 private period = 10 days;
+    uint256 private h = 1000; // 10%
+    uint256 private period = 1 days;
     
     modifier onlyGovernance {
         require(
@@ -205,7 +205,7 @@ abstract contract Joint {
         // If we have previously invested funds, let's distrubute PnL equally in
         // each token's own terms
         if (investedA != 0 && investedB != 0) {
-            // Liquidate will also claim rewards
+            // Liquidate will also claim rewards & close hedge
             (uint256 currentA, uint256 currentB) = _liquidatePosition();
 
             if (tokenA != reward && tokenB != reward) {
@@ -283,6 +283,10 @@ abstract contract Joint {
         }
     }
 
+    function getOptionsProfit() public view returns (uint, uint) {
+        return LPHedgingLib.getOptionsProfit(activeCallID, activePutID);
+    }
+
     function estimatedTotalAssetsAfterBalance()
         public
         view
@@ -294,6 +298,10 @@ abstract contract Joint {
 
         _aBalance = _aBalance.add(balanceOfA());
         _bBalance = _bBalance.add(balanceOfB());
+
+        (uint256 callProfit, uint256 putProfit) = getOptionsProfit();
+        _aBalance = _aBalance.add(callProfit);
+        _bBalance = _bBalance.add(putProfit);
 
         if (reward == tokenA) {
             _aBalance = _aBalance.add(rewardsPending);
@@ -344,12 +352,59 @@ abstract contract Joint {
     }
 
     function hedgeLP() internal {
-        IERC20 _pair = IERC20(getPair();
+        IERC20 _pair = IERC20(getPair());
         // TODO: sell options if they are active
         require(activeCallID == 0 && activePutID == 0);
-        (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(address(_pair), _pair.balanceOf(address(this)), h, period);
+        (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) = LPHedgingLib.getLPInfo(address(_pair));
+        emit LPInfo(amount, token0, token1, token0Amount, token1Amount);
+
+        (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(address(_pair), h, period);
     }
 
+    function getOptionsAmount(uint q, uint _h) public view returns (uint, uint) {
+        return LPHedgingLib.getOptionsAmount(q, _h);
+    }
+
+    function getLPInfo(uint _amount) internal view returns (uint amount, address token0, address token1, uint token0Amount, uint token1Amount){
+        amount = _amount;
+        token0 = IUniswapV2Pair(pair).token0();
+        token1 = IUniswapV2Pair(pair).token1();
+
+        uint256 balance0 = IERC20(token0).balanceOf(address(pair));
+        uint256 balance1 = IERC20(token1).balanceOf(address(pair));
+        uint256 totalSupply = IUniswapV2Pair(pair).totalSupply();
+
+        token0Amount = amount.mul(balance0) / totalSupply;
+        token1Amount = amount.mul(balance1) / totalSupply;
+    }
+
+    function getQ(uint256 _amount) public view returns (uint, uint, uint) {
+        (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) = getLPInfo(_amount);
+        uint256 q;
+        if(LPHedgingLib.asset1 == token0) {
+            q = token0Amount;
+        } else if (LPHedgingLib.asset1 == token1) {
+            q = token1Amount;
+        } else {
+            revert("LPtoken not supported");
+        }
+        return (token0Amount, token1Amount, q);
+    }
+
+    // function getCallAmount(uint256 q, uint256 h) public view returns (uint256) {
+    //     return LPHedgingLib.getCallAmount(q, h);
+    // }
+
+    // function getPutAmount(uint256 q, uint256 h) public view returns (uint256) {
+    //     return LPHedgingLib.getPutAmount(q, h);
+    // }
+
+    // function sqrt(uint x) public view returns (uint) {
+    //     return LPHedgingLib.sqrt(x);
+    // }
+
+    event LPInfo(uint amount, address token0, address token1, uint token0Amount, uint token1Amount);
+    event Hedge(uint callAmount, uint putAmount);
 
     function calculateSellToBalance(
         uint256 currentA,
@@ -459,8 +514,8 @@ abstract contract Joint {
             IUniswapV2Router02(router).addLiquidity(
                 tokenA,
                 tokenB,
-                balanceOfA().mul(hedgeBudget).div(MAX_BPS),
-                balanceOfB().mul(hedgeBudget).div(MAX_BPS),
+                balanceOfA().mul(RATIO_PRECISION.sub(hedgeBudget)).div(RATIO_PRECISION),
+                balanceOfB().mul(RATIO_PRECISION.sub(hedgeBudget)).div(RATIO_PRECISION),
                 0,
                 0,
                 address(this),
@@ -573,6 +628,10 @@ abstract contract Joint {
         if (balanceB > 0) {
             IERC20(tokenB).transfer(address(providerB), balanceB);
         }
+    }
+
+    function onERC721Received(address , address , uint , bytes calldata) public pure virtual returns (bytes4){
+        return this.onERC721Received.selector;
     }
 
     function getPair() internal view returns (address) {

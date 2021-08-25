@@ -26,6 +26,8 @@ interface IHegicPool {
     function profitOf(uint256 id) external view returns (uint256);
 
     function exercise(uint256 id) external;
+
+    function token() external returns (IERC20);
 }
 
 interface IERC20Extended is IERC20 {
@@ -49,39 +51,59 @@ library LPHedgingLib {
 
     uint256 private constant MAX_BPS = 10_000;
 
-    function hedgeLPToken(address lpToken, uint256 amount, uint256 h, uint256 period) external returns (uint256 callID, uint256 putID) {
+    function _checkAllowance() internal {
+        // TODO: add correct check (currently checking uint256 max)
+        IERC20 _token;
+        
+        _token = hegicCallOptionsPool.token(); 
+        if(_token.allowance(address(hegicCallOptionsPool), address(this)) < type(uint256).max) {
+            _token.approve(address(hegicCallOptionsPool), type(uint256).max);
+        } 
+
+        _token = hegicPutOptionsPool.token(); 
+        if(_token.allowance(address(hegicPutOptionsPool), address(this)) < type(uint256).max) {
+            _token.approve(address(hegicPutOptionsPool), type(uint256).max);
+        } 
+    }
+
+    function hedgeLPToken(address lpToken, uint256 h, uint256 period) external returns (uint256 callID, uint256 putID) {
         // TODO: check if this require makes sense
-        require(IUniswapV2Pair(lpToken).balanceOf(address(this)) == amount);
-
-        address token0 = IUniswapV2Pair(lpToken).token0();
-        address token1 = IUniswapV2Pair(lpToken).token1();
-
-        uint256 token0Amount;
-        uint256 token1Amount;
-        { // to avoid stack too deep
-            uint256 balance0 = IERC20(token0).balanceOf(address(this));
-            uint256 balance1 = IERC20(token1).balanceOf(address(this));
-            uint256 totalSupply = IUniswapV2Pair(lpToken).totalSupply();
-
-            token0Amount = amount.mul(balance0) / totalSupply;
-            token1Amount = amount.mul(balance1) / totalSupply;
+        ( , address token0, address token1, uint256 token0Amount, uint256 token1Amount) = getLPInfo(lpToken);
+        if(h == 0 || period == 0 || token0Amount == 0 || token1Amount == 0) {
+            return (0, 0);
         }
 
         uint256 q;
-        uint256 decimals; 
         if(asset1 == token0) {
             q = token0Amount;
-            decimals = uint256(10)**uint256(IERC20Extended(token0).decimals());
         } else if (asset1 == token1) {
             q = token1Amount;
-            decimals = uint256(10)**uint256(IERC20Extended(token1).decimals());
         } else {
             revert("LPtoken not supported");
         }
 
-        (uint256 putAmount, uint256 callAmount) = getOptionsAmount(q, h, decimals);
+        (uint256 putAmount, uint256 callAmount) = getOptionsAmount(q, h);
+        _checkAllowance();
         callID = buyOptionFrom(hegicCallOptionsPool, callAmount, period);
         putID = buyOptionFrom(hegicPutOptionsPool, putAmount, period);
+    }
+
+    function getOptionsProfit(uint256 callID, uint256 putID) external view returns (uint, uint) {
+        return (getCallProfit(callID), getPutProfit(putID));
+    }
+
+    function getCallProfit(uint256 id) internal view returns (uint) {
+        if(id == 0) {
+            return 0;
+        }
+        return hegicCallOptionsPool.profitOf(id);
+    }
+
+    function getPutProfit(uint256 id) internal view  returns (uint) {
+        if(id == 0) {
+            return 0;
+        }
+        return hegicPutOptionsPool.profitOf(id);
     }
 
     function closeHedge(uint256 callID, uint256 putID) external returns (uint256 payoutToken0, uint256 payoutToken1) {
@@ -106,18 +128,41 @@ library LPHedgingLib {
         // TODO: return payout per token from exercise
     }
 
-    function getOptionsAmount(uint256 q, uint256 h, uint256 decimals) internal returns (uint256 putAmount, uint256 callAmount) {
+    function getOptionsAmount(uint256 q, uint256 h) public view returns (uint256 putAmount, uint256 callAmount) {
+        callAmount = getCallAmount(q, h);
+        putAmount = getPutAmount(q, h);
+    }
+
+    function getCallAmount(uint256 q, uint256 h) public view returns (uint256) {
         uint256 one = MAX_BPS;
-        uint256 two = one.mul(uint256(2));
-        callAmount = one.add(two.div(h).mul(one.sub(sqrt(one.add(h))))).mul(decimals).div(MAX_BPS); // 1 + 2 / h * (1 - sqrt(1 + h))
-        putAmount = one.sub(two.div(h).mul(one.sub(sqrt(one.sub(h))))).mul(decimals).div(MAX_BPS); // 1 - 2 / h * (1 - sqrt(1 - h));
+        return one.sub(uint(2).mul(one).mul(sqrt(one.add(h)).sub(one)).div(h)).mul(q).div(MAX_BPS); // 1 + 2 / h * (1 - sqrt(1 + h))
     }
 
-    function buyOptionFrom(IHegicPool pool, uint256 period, uint256 amount) internal returns (uint256) {
-        return pool.sellOption(address(this), period, amount, 0);
+    function getPutAmount(uint256 q, uint256 h) public view returns (uint256) {
+        uint256 one = MAX_BPS;
+        return uint(2).mul(one).mul(one.sub(sqrt(one.sub(h)))).div(h).sub(one).mul(q).div(MAX_BPS); // 1 - 2 / h * (1 - sqrt(1 - h))
     }
 
-    function sqrt(uint256 x) internal pure returns (uint256 result) {
+    function buyOptionFrom(IHegicPool pool, uint256 amount, uint256 period) internal returns (uint256) {
+        return pool.sellOption(address(this), period, amount, 0); // strike = 0 is ATM
+    }
+
+    function getLPInfo(address lpToken) public view returns (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) {
+        amount = IUniswapV2Pair(lpToken).balanceOf(address(this));
+
+        token0 = IUniswapV2Pair(lpToken).token0();
+        token1 = IUniswapV2Pair(lpToken).token1();
+
+        uint256 balance0 = IERC20(token0).balanceOf(address(lpToken));
+        uint256 balance1 = IERC20(token1).balanceOf(address(lpToken));
+        uint256 totalSupply = IUniswapV2Pair(lpToken).totalSupply();
+
+        token0Amount = amount.mul(balance0) / totalSupply;
+        token1Amount = amount.mul(balance1) / totalSupply;
+    }
+
+    function sqrt(uint256 x) public pure returns (uint256 result) {
+        x = x.mul(MAX_BPS);
         result = x;
         uint256 k = (x >> 1) + 1;
         while (k < result) (result, k) = (k, (x / k + k) >> 1);
