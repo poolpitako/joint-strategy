@@ -18,7 +18,7 @@ def test_operation_hedged(
     strategist,
     tokenA_whale,
     tokenB_whale,
-    LPHedgingLibrary
+    LPHedgingLibrary,
 ):
 
     tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
@@ -32,7 +32,6 @@ def test_operation_hedged(
 
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
-
 
     # disabling this bc im paying for options and leaving uninvested funds (< 1%)
     # assert xor(
@@ -121,12 +120,14 @@ def test_operation_swap_a4b_hedged_light(
     strategist,
     tokenA_whale,
     tokenB_whale,
-    mock_chainlink
+    mock_chainlink,
 ):
-    oracle = Contract(Contract("0xb9ed94c6d594b2517c4296e24A8c517FF133fb6d").priceProvider())
+    oracle = Contract(
+        Contract("0xb9ed94c6d594b2517c4296e24A8c517FF133fb6d").priceProvider()
+    )
     pair = Contract(joint.pair())
     (reserve0, reserve1, a) = pair.getReserves()
-    mock_chainlink.setPrice(reserve0/reserve1*1e12 * 10**8, {'from': strategist})
+    mock_chainlink.setPrice(reserve0 / reserve1 * 1e12 * 10 ** 8, {"from": strategist})
     print(f"Price according to Pair {pair.address} is {reserve0/reserve1*1e12}")
     print(f"Price according to Pair {pair.address} is {oracle.latestAnswer()/1e8}")
 
@@ -169,12 +170,16 @@ def test_operation_swap_a4b_hedged_light(
     print(f"\tStrike {callInfo[1]/1e8}")
     print(f"\tAmount {callInfo[2]/1e18}")
     print(f"\tTTM {(callInfo[4]-chain.time())/3600}h")
-    print(f"\tCost {(callInfo[5]+callInfo[6])/1e18} {tokenA.symbol()}")
+    costCall = (callInfo[5]+callInfo[6])/0.8
+    investedA -= costCall
+    print(f"\tCost {(callInfo[5]+callInfo[6])/0.8/1e18} {tokenA.symbol()}")
     print(f"PUT #{putID}")
     print(f"\tStrike {putInfo[1]/1e8}")
     print(f"\tAmount {putInfo[2]/1e18}")
     print(f"\tTTM {(putInfo[4]-chain.time())/3600}h")
-    print(f"\tCost {(putInfo[5]+putInfo[6])/1e6} {tokenB.symbol()}")
+    costPut = (putInfo[5]+putInfo[6])/0.8
+    investedB -= costPut
+    print(f"\tCost {costPut/1e6} {tokenB.symbol()}")
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     dump_amountA = 0.001 * tokenA.balanceOf(tokenA_whale)
@@ -188,18 +193,18 @@ def test_operation_swap_a4b_hedged_light(
         {"from": tokenA_whale},
     )
     (reserve0, reserve1, a) = pair.getReserves()
-    mock_chainlink.setPrice(reserve0/reserve1*1e12 * 10**8, {'from': strategist})
+    mock_chainlink.setPrice(reserve0 / reserve1 * 1e12 * 10 ** 8, {"from": strategist})
     print(f"Price according to Pair {pair.address} is {oracle.latestAnswer()/1e8}")
     (callPayout, putPayout) = joint.getOptionsProfit()
-    print(f"Payout from CALL option: {callPayout/1e18}")
-    print(f"Payout from PUT option: {putPayout/1e6}")
+    print(f"Payout from CALL option: {callPayout/1e18} {tokenA.symbol()}")
+    print(f"Payout from PUT option: {putPayout/1e6} {tokenB.symbol()}")
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 1 - 15*60)
-    chain.mine(int(3600 / 13) * 24 * 1 - int(60*15/13))
+    chain.sleep(3600 * 24 * 1 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
@@ -215,6 +220,12 @@ def test_operation_swap_a4b_hedged_light(
     providerB.setTakeProfit(True, {"from": strategist})
     providerA.harvest({"from": strategist})
     providerB.harvest({"from": strategist})
+
+    callInfo = callProvider.options(callID)
+    putInfo = putProvider.options(putID)
+
+    assert ((callInfo[0] == 2) & (callPayout > 0)) | ((callPayout == 0) & (callInfo[0] == 1))
+    assert ((putInfo[0] == 2) & (putPayout > 0)) | ((putPayout == 0) & (putInfo[0] == 1))
 
     assert providerA.balanceOfWant() > 0
     assert providerB.balanceOfWant() > 0
@@ -238,6 +249,7 @@ def test_operation_swap_a4b_hedged_light(
     )
 
     assert pytest.approx(returnA, rel=50e-3) == returnB
+
 
 def test_operation_swap_a4b_hedged_heavy(
     chain,
@@ -283,7 +295,9 @@ def test_operation_swap_a4b_hedged_heavy(
     )
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
-    print(f"Dumping tokenA really bad. Selling {tokenA.balanceOf(tokenA_whale) / 1e18} {tokenA.symbol()}")
+    print(
+        f"Dumping tokenA really bad. Selling {tokenA.balanceOf(tokenA_whale) / 1e18} {tokenA.symbol()}"
+    )
     router.swapExactTokensForTokens(
         tokenA.balanceOf(tokenA_whale),
         0,
@@ -334,6 +348,7 @@ def test_operation_swap_a4b_hedged_heavy(
 
     assert pytest.approx(returnA, rel=50e-3) == returnB
 
+
 def test_operation_swap_b4a_hedged_light(
     chain,
     vaultA,
@@ -378,7 +393,9 @@ def test_operation_swap_b4a_hedged_light(
     )
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
-    print(f"Dumping tokenB really bad. Selling {tokenB.balanceOf(tokenB_whale) / 1e6} {tokenB.symbol()}")
+    print(
+        f"Dumping tokenB really bad. Selling {tokenB.balanceOf(tokenB_whale) / 1e6} {tokenB.symbol()}"
+    )
 
     router.swapExactTokensForTokens(
         tokenB.balanceOf(tokenB_whale),
@@ -475,7 +492,9 @@ def test_operation_swap_b4a_hedged_heavy(
     )
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
-    print(f"Dumping tokenB really bad. Selling {tokenB.balanceOf(tokenB_whale) / 1e6} {tokenB.symbol()}")
+    print(
+        f"Dumping tokenB really bad. Selling {tokenB.balanceOf(tokenB_whale) / 1e6} {tokenB.symbol()}"
+    )
 
     router.swapExactTokensForTokens(
         tokenB.balanceOf(tokenB_whale),

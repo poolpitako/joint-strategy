@@ -44,13 +44,13 @@ def attacker(accounts):
 
 @pytest.fixture
 def tokenA():
-    yield Contract("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2") # WETH
+    yield Contract("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2")  # WETH
     # yield Contract(vaultA.token())
 
 
 @pytest.fixture
 def tokenB():
-    yield Contract("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48") # USDC
+    yield Contract("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")  # USDC
     # yield Contract(vaultB.token())
 
 
@@ -85,7 +85,6 @@ def vaultA(vaultA_test, tokenA):
     # vaultA_prod = Contract("0xa258C4606Ca8206D8aA700cE2143D7db854D168c")
     # assert vaultA_prod.token() == tokenA.address
     # yield vaultA_prod
-    
 
 
 @pytest.fixture
@@ -104,7 +103,7 @@ def tokenA_whale(accounts):
 
 @pytest.fixture
 def tokenB_whale(accounts):
-    yield accounts.at("0x0A59649758aa4d66E25f08Dd01271e891fe52199", force=True) # usdc
+    yield accounts.at("0x0A59649758aa4d66E25f08Dd01271e891fe52199", force=True)  # usdc
 
 
 @pytest.fixture
@@ -119,7 +118,7 @@ def amountA(tokenA):
 
 @pytest.fixture
 def amountB(tokenB):
-    yield 3300 * 10 * 10 ** tokenB.decimals() # price A/B times amountA
+    yield 3300 * 10 * 10 ** tokenB.decimals()  # price A/B times amountA
 
 
 @pytest.fixture
@@ -147,9 +146,11 @@ def sushi():
 def mc_pid():
     yield 1
 
+
 @pytest.fixture
 def LPHedgingLibrary(LPHedgingLib, gov):
     yield gov.deploy(LPHedgingLib)
+
 
 @pytest.fixture(autouse=True)
 def mock_chainlink(AggregatorMock, gov):
@@ -158,15 +159,24 @@ def mock_chainlink(AggregatorMock, gov):
     priceProvider = Contract("0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419")
     aggregator = gov.deploy(AggregatorMock, 0)
 
-    priceProvider.proposeAggregator(aggregator.address, {'from': owner})
-    priceProvider.confirmAggregator(aggregator.address, {'from': owner})
+    priceProvider.proposeAggregator(aggregator.address, {"from": owner})
+    priceProvider.confirmAggregator(aggregator.address, {"from": owner})
 
     yield aggregator
 
 
 @pytest.fixture
 def joint(
-    gov, providerA, providerB, SushiJoint, router, masterchef, sushi, weth, mc_pid, LPHedgingLibrary
+    gov,
+    providerA,
+    providerB,
+    SushiJoint,
+    router,
+    masterchef,
+    sushi,
+    weth,
+    mc_pid,
+    LPHedgingLibrary,
 ):
     joint = gov.deploy(
         SushiJoint, providerA, providerB, router, weth, masterchef, sushi, mc_pid

@@ -62,7 +62,7 @@ abstract contract Joint {
 
     uint256 private h = 1000; // 10%
     uint256 private period = 1 days;
-    
+
     modifier onlyGovernance {
         require(
             msg.sender == providerA.vault().governance() ||
@@ -275,7 +275,9 @@ abstract contract Joint {
         ); // don't create LP if we are already invested
 
         (investedA, investedB, ) = createLP();
-        hedgeLP();
+        if (hedgeBudget > 0) {
+            hedgeLP();
+        }
         depositLP();
 
         if (balanceOfStake() != 0 || balanceOfPair() != 0) {
@@ -283,7 +285,7 @@ abstract contract Joint {
         }
     }
 
-    function getOptionsProfit() public view returns (uint, uint) {
+    function getOptionsProfit() public view returns (uint256, uint256) {
         return LPHedgingLib.getOptionsProfit(activeCallID, activePutID);
     }
 
@@ -355,56 +357,66 @@ abstract contract Joint {
         IERC20 _pair = IERC20(getPair());
         // TODO: sell options if they are active
         require(activeCallID == 0 && activePutID == 0);
-        (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) = LPHedgingLib.getLPInfo(address(_pair));
-        emit LPInfo(amount, token0, token1, token0Amount, token1Amount);
-
-        (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(address(_pair), h, period);
+        // TODO: remove
+        // (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) = LPHedgingLib.getLPInfo(address(_pair));
+        (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(
+            address(_pair),
+            h,
+            period
+        );
     }
 
-    function getOptionsAmount(uint q, uint _h) public view returns (uint, uint) {
-        return LPHedgingLib.getOptionsAmount(q, _h);
-    }
-
-    function getLPInfo(uint _amount) internal view returns (uint amount, address token0, address token1, uint token0Amount, uint token1Amount){
-        amount = _amount;
-        token0 = IUniswapV2Pair(pair).token0();
-        token1 = IUniswapV2Pair(pair).token1();
-
-        uint256 balance0 = IERC20(token0).balanceOf(address(pair));
-        uint256 balance1 = IERC20(token1).balanceOf(address(pair));
-        uint256 totalSupply = IUniswapV2Pair(pair).totalSupply();
-
-        token0Amount = amount.mul(balance0) / totalSupply;
-        token1Amount = amount.mul(balance1) / totalSupply;
-    }
-
-    function getQ(uint256 _amount) public view returns (uint, uint, uint) {
-        (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) = getLPInfo(_amount);
-        uint256 q;
-        if(LPHedgingLib.asset1 == token0) {
-            q = token0Amount;
-        } else if (LPHedgingLib.asset1 == token1) {
-            q = token1Amount;
-        } else {
-            revert("LPtoken not supported");
-        }
-        return (token0Amount, token1Amount, q);
-    }
-
-    // function getCallAmount(uint256 q, uint256 h) public view returns (uint256) {
-    //     return LPHedgingLib.getCallAmount(q, h);
+    // TODO: remove
+    // function getOptionsAmount(uint q, uint _h) public view returns (uint, uint) {
+    //     return LPHedgingLib.getOptionsAmount(q, _h);
     // }
 
-    // function getPutAmount(uint256 q, uint256 h) public view returns (uint256) {
-    //     return LPHedgingLib.getPutAmount(q, h);
+    // function getLPInfo(uint _amount) internal view returns (uint amount, address token0, address token1, uint token0Amount, uint token1Amount){
+    //     amount = _amount;
+    //     token0 = IUniswapV2Pair(pair).token0();
+    //     token1 = IUniswapV2Pair(pair).token1();
+
+    //     uint256 balance0 = IERC20(token0).balanceOf(address(pair));
+    //     uint256 balance1 = IERC20(token1).balanceOf(address(pair));
+    //     uint256 totalSupply = IUniswapV2Pair(pair).totalSupply();
+
+    //     token0Amount = amount.mul(balance0) / totalSupply;
+    //     token1Amount = amount.mul(balance1) / totalSupply;
     // }
 
-    // function sqrt(uint x) public view returns (uint) {
-    //     return LPHedgingLib.sqrt(x);
+    // function getQ(uint256 _amount) public view returns (uint, uint, uint) {
+    //     (uint amount, address token0, address token1, uint token0Amount, uint token1Amount) = getLPInfo(_amount);
+    //     uint256 q;
+    //     if(LPHedgingLib.asset1 == token0) {
+    //         q = token0Amount;
+    //     } else if (LPHedgingLib.asset1 == token1) {
+    //         q = token1Amount;
+    //     } else {
+    //         revert("LPtoken not supported");
+    //     }
+    //     return (token0Amount, token1Amount, q);
     // }
 
-    event LPInfo(uint amount, address token0, address token1, uint token0Amount, uint token1Amount);
-    event Hedge(uint callAmount, uint putAmount);
+    // // function getCallAmount(uint256 q, uint256 h) public view returns (uint256) {
+    // //     return LPHedgingLib.getCallAmount(q, h);
+    // // }
+
+    // // function getPutAmount(uint256 q, uint256 h) public view returns (uint256) {
+    // //     return LPHedgingLib.getPutAmount(q, h);
+    // // }
+
+    // // function sqrt(uint x) public view returns (uint) {
+    // //     return LPHedgingLib.sqrt(x);
+    // // }
+
+    event LPInfo(
+        uint256 amount,
+        address token0,
+        address token1,
+        uint256 token0Amount,
+        uint256 token1Amount
+    );
+    event Hedge(uint256 callAmount, uint256 putAmount);
 
     function calculateSellToBalance(
         uint256 currentA,
@@ -514,8 +526,12 @@ abstract contract Joint {
             IUniswapV2Router02(router).addLiquidity(
                 tokenA,
                 tokenB,
-                balanceOfA().mul(RATIO_PRECISION.sub(hedgeBudget)).div(RATIO_PRECISION),
-                balanceOfB().mul(RATIO_PRECISION.sub(hedgeBudget)).div(RATIO_PRECISION),
+                balanceOfA().mul(RATIO_PRECISION.sub(hedgeBudget)).div(
+                    RATIO_PRECISION
+                ),
+                balanceOfB().mul(RATIO_PRECISION.sub(hedgeBudget)).div(
+                    RATIO_PRECISION
+                ),
                 0,
                 0,
                 address(this),
@@ -601,7 +617,11 @@ abstract contract Joint {
         if (balanceOfPair() == 0) {
             return (0, 0);
         }
-        LPHedgingLib.closeHedge(activeCallID, activePutID);
+        // only close hedge if a hedge is open
+        if (activeCallID != 0 && activePutID != 0) {
+            LPHedgingLib.closeHedge(activeCallID, activePutID);
+        }
+
         activeCallID = 0;
         activePutID = 0;
         // **WARNING**: This call is sandwichable, care should be taken
@@ -630,7 +650,12 @@ abstract contract Joint {
         }
     }
 
-    function onERC721Received(address , address , uint , bytes calldata) public pure virtual returns (bytes4){
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) public pure virtual returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
@@ -682,8 +707,8 @@ abstract contract Joint {
         _returnLooseToProviders();
     }
 
-    function setHedgeBudget(uint256 _hedgeBudget) external onlyAuthorized{
-        // TODO: consider adding a max? ruggable? 
+    function setHedgeBudget(uint256 _hedgeBudget) external onlyAuthorized {
+        // TODO: consider adding a max? ruggable?
         hedgeBudget = _hedgeBudget;
     }
 
