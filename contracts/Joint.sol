@@ -201,6 +201,15 @@ abstract contract Joint {
 
     function name() external view virtual returns (string memory) {}
 
+    event Ratios(uint256 ratioA, uint256 ratioB);
+    event Numbers(
+        uint256 currentA,
+        uint256 currentB,
+        uint256 investedA,
+        uint256 investedB
+    );
+    event Rebalance(address sellToken, uint256 sellAmount);
+
     function prepareReturn(bool returnFunds) external onlyProviders {
         // If we have previously invested funds, let's distrubute PnL equally in
         // each token's own terms
@@ -221,6 +230,9 @@ abstract contract Joint {
             (uint256 ratioA, uint256 ratioB) =
                 getRatios(currentA, currentB, investedA, investedB);
 
+            emit Ratios(ratioA, ratioB);
+            emit Numbers(currentA, currentB, investedA, investedB);
+
             (address sellToken, uint256 sellAmount) =
                 calculateSellToBalance(
                     currentA,
@@ -228,6 +240,7 @@ abstract contract Joint {
                     investedA,
                     investedB
                 );
+            emit Rebalance(sellToken, sellAmount);
 
             if (sellToken != address(0) && sellAmount != 0) {
                 uint256 buyAmount =
@@ -251,6 +264,8 @@ abstract contract Joint {
                     investedA,
                     investedB
                 );
+
+                emit Ratios(ratioA, ratioB);
             }
         }
 
@@ -409,14 +424,14 @@ abstract contract Joint {
     // //     return LPHedgingLib.sqrt(x);
     // // }
 
-    event LPInfo(
-        uint256 amount,
-        address token0,
-        address token1,
-        uint256 token0Amount,
-        uint256 token1Amount
-    );
-    event Hedge(uint256 callAmount, uint256 putAmount);
+    // event LPInfo(
+    //     uint256 amount,
+    //     address token0,
+    //     address token1,
+    //     uint256 token0Amount,
+    //     uint256 token1Amount
+    // );
+    // event Hedge(uint256 callAmount, uint256 putAmount);
 
     function calculateSellToBalance(
         uint256 currentA,

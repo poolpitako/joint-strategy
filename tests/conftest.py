@@ -152,6 +152,13 @@ def LPHedgingLibrary(LPHedgingLib, gov):
     yield gov.deploy(LPHedgingLib)
 
 
+@pytest.fixture
+def oracle():
+    yield Contract(
+        Contract("0xb9ed94c6d594b2517c4296e24A8c517FF133fb6d").priceProvider()
+    )
+
+
 @pytest.fixture(autouse=True)
 def mock_chainlink(AggregatorMock, gov):
     owner = "0x21f73d42eb58ba49ddb685dc29d3bf5c0f0373ca"

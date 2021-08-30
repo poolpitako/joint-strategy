@@ -82,6 +82,9 @@ library LPHedgingLib {
         }
 
         (uint256 putAmount, uint256 callAmount) = getOptionsAmount(q, h);
+
+        // TODO: check enough liquidity available in options provider
+        // TODO: check enough balance to pay for this
         _checkAllowance();
         callID = buyOptionFrom(hegicCallOptionsPool, callAmount, period);
         putID = buyOptionFrom(hegicPutOptionsPool, putAmount, period);
