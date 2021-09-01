@@ -118,7 +118,7 @@ def amountA(tokenA):
 
 @pytest.fixture
 def amountB(tokenB):
-    yield 3300 * 10 * 10 ** tokenB.decimals()  # price A/B times amountA
+    yield 3545 * 10 * 10 ** tokenB.decimals()  # price A/B times amountA
 
 
 @pytest.fixture

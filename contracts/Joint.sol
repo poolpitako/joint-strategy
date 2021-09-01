@@ -56,7 +56,7 @@ abstract contract Joint {
     uint256 private investedB;
 
     // HEDGING
-    uint256 public hedgeBudget = 50; // 0.5% per hedging period
+    uint256 public hedgeBudget = 5; // 0.05% per hedging period
     uint256 public activeCallID;
     uint256 public activePutID;
 
@@ -291,6 +291,7 @@ abstract contract Joint {
 
         (investedA, investedB, ) = createLP();
         if (hedgeBudget > 0) {
+            // take into account that if hedgeBudget is not enough, it will revert
             hedgeLP();
         }
         depositLP();
@@ -723,8 +724,18 @@ abstract contract Joint {
     }
 
     function setHedgeBudget(uint256 _hedgeBudget) external onlyAuthorized {
-        // TODO: consider adding a max? ruggable?
+        require(_hedgeBudget < RATIO_PRECISION);
         hedgeBudget = _hedgeBudget;
+    }
+
+    function setHedgingPeriod(uint256 _period) external onlyAuthorized {
+        require(_period < 90 days);
+        period = _period;
+    }
+
+    function setProtectionRange(uint256 _h) external onlyAuthorized {
+        require(_h < RATIO_PRECISION);
+        h = _h;
     }
 
     function swapTokenForToken(
