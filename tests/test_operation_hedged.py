@@ -85,8 +85,8 @@ def x_test_operation_hedged(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 1 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 7 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
@@ -182,14 +182,18 @@ def test_operation_swap_a4b_hedged_light(
     investedB = (
         vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
     )
+
+    startingA = joint.estimatedTotalAssetsInToken(tokenA)
+    startingB = joint.estimatedTotalAssetsInToken(tokenB)
+
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
 
     callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
 
-    # investedA -= callCost
-    # investedB -= putCost
+    investedA -= callCost
+    investedB -= putCost
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     dump_amountA = 3_000 * 1e18
@@ -216,12 +220,18 @@ def test_operation_swap_a4b_hedged_light(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 1 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 7 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
+
+    currentA = joint.estimatedTotalAssetsInToken(tokenA)
+    currentB = joint.estimatedTotalAssetsInToken(tokenB)
+    assert currentA/currentB == pytest.approx(startingA/startingB, rel=50e-3)
+
+    print(f"Current RatioA/B: {currentA/currentB} vs initial ratio A/B {startingA/startingB}")
 
     callID = joint.activeCallID()
     putID = joint.activePutID()
@@ -256,6 +266,7 @@ def test_operation_swap_a4b_hedged_light(
     assert lossB == 0
     assert gainA > 0
     assert gainB > 0
+
 
     returnA = gainA / investedA
     returnB = gainB / investedB
@@ -313,14 +324,19 @@ def test_operation_swap_a4b_hedged_heavy(
     investedB = (
         vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
     )
+
+    startingA = joint.estimatedTotalAssetsInToken(tokenA)
+    startingB = joint.estimatedTotalAssetsInToken(tokenB)
+
+
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
     
     callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
 
-    # investedA -= callCost
-    # investedB -= putCost
+    investedA -= callCost
+    investedB -= putCost
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     print(
@@ -349,12 +365,17 @@ def test_operation_swap_a4b_hedged_heavy(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 1 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 7 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
+
+    currentA = joint.estimatedTotalAssetsInToken(tokenA)
+    currentB = joint.estimatedTotalAssetsInToken(tokenB)
+    assert currentA/currentB == pytest.approx(startingA/startingB, rel=50e-3)
+    print(f"Current RatioA/B: {currentA/currentB} vs initial ratio A/B {startingA/startingB}")
 
     callID = joint.activeCallID()
     putID = joint.activePutID()
@@ -440,14 +461,19 @@ def test_operation_swap_b4a_hedged_light(
     investedB = (
         vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
     )
+
+    startingA = joint.estimatedTotalAssetsInToken(tokenA)
+    startingB = joint.estimatedTotalAssetsInToken(tokenB)
+
+
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
 
     callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
 
-    # investedA -= callCost
-    # investedB -= putCost
+    investedA -= callCost
+    investedB -= putCost
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
     dump_amountB = 10_000_000 * 1e6
@@ -475,12 +501,16 @@ def test_operation_swap_b4a_hedged_light(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 1 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 7 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
+    currentA = joint.estimatedTotalAssetsInToken(tokenA)
+    currentB = joint.estimatedTotalAssetsInToken(tokenB)
+    assert currentA/currentB == pytest.approx(startingA/startingB, rel=50e-3)
+    print(f"Current RatioA/B: {currentA/currentB} vs initial ratio A/B {startingA/startingB}")
 
     callID = joint.activeCallID()
     putID = joint.activePutID()
@@ -566,13 +596,18 @@ def test_operation_swap_b4a_hedged_heavy(
     investedB = (
         vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
     )
+
+    startingA = joint.estimatedTotalAssetsInToken(tokenA)
+    startingB = joint.estimatedTotalAssetsInToken(tokenB)
+
+
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
     callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
 
-    # investedA -= callCost
-    # investedB -= putCost
+    investedA -= callCost
+    investedB -= putCost
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
     print(
@@ -606,6 +641,10 @@ def test_operation_swap_b4a_hedged_heavy(
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
+    currentA = joint.estimatedTotalAssetsInToken(tokenA)
+    currentB = joint.estimatedTotalAssetsInToken(tokenB)
+    assert currentA/currentB == pytest.approx(startingA/startingB, rel=50e-3)
+    print(f"Current RatioA/B: {currentA/currentB} vs initial ratio A/B {startingA/startingB}")
 
     callID = joint.activeCallID()
     putID = joint.activePutID()
