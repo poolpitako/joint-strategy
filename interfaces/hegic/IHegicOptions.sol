@@ -1,7 +1,6 @@
 pragma solidity 0.6.12;
 
 /**
- * SPDX-License-Identifier: GPL-3.0-or-later
  * Hegic
  * Copyright (C) 2021 Hegic Protocol
  *

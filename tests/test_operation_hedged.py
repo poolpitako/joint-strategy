@@ -11,6 +11,7 @@ def print_hedge_status(joint, tokenA, tokenB):
     callInfo = callProvider.options(callID)
     putInfo = putProvider.options(putID)
     assert (joint.activeCallID() != 0) & (joint.activePutID() != 0)
+    (callPayout, putPayout) = joint.getOptionsProfit()
     print(f"Bought two options:")
     print(f"CALL #{callID}")
     print(f"\tStrike {callInfo[1]/1e8}")
@@ -18,12 +19,14 @@ def print_hedge_status(joint, tokenA, tokenB):
     print(f"\tTTM {(callInfo[4]-chain.time())/3600}h")
     costCall = (callInfo[5]+callInfo[6])/0.8
     print(f"\tCost {(callInfo[5]+callInfo[6])/0.8/1e18} {tokenA.symbol()}")
+    print(f"\tPayout: {callPayout/1e18} {tokenA.symbol()}")
     print(f"PUT #{putID}")
     print(f"\tStrike {putInfo[1]/1e8}")
     print(f"\tAmount {putInfo[2]/1e18}")
     print(f"\tTTM {(putInfo[4]-chain.time())/3600}h")
     costPut = (putInfo[5]+putInfo[6])/0.8
     print(f"\tCost {costPut/1e6} {tokenB.symbol()}")
+    print(f"\tPayout: {putPayout/1e6} {tokenB.symbol()}")
     return (costCall, costPut)
 
 def sync_price(joint, mock_chainlink, strategist):

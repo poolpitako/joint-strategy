@@ -152,7 +152,7 @@ library LPHedgingLib {
             one
                 .sub(uint256(2).mul(one).mul(sqrt(one.add(h)).sub(one)).div(h))
                 .mul(q)
-                .div(MAX_BPS); // 1 + 2 / h * (1 - sqrt(1 + h))
+                .div(MAX_BPS); // 1 - 2 / h * (sqrt(1 + h) - 1)
     }
 
     function getPutAmount(uint256 q, uint256 h) public view returns (uint256) {
@@ -164,7 +164,7 @@ library LPHedgingLib {
                 .div(h)
                 .sub(one)
                 .mul(q)
-                .div(MAX_BPS); // 1 - 2 / h * (1 - sqrt(1 - h))
+                .div(MAX_BPS); // 2 * (1 - sqrt(1 - h)) / h - 1
     }
 
     function buyOptionFrom(
