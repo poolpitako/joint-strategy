@@ -481,9 +481,12 @@ abstract contract Joint {
     {
         bool is_weth =
             _token_in == address(WETH) || _token_out == address(WETH);
-        _path = new address[](is_weth ? 2 : 3);
+        bool is_internal =
+            (_token_in == tokenA && _token_out == tokenB) ||
+                (_token_in == tokenB && _token_out == tokenA);
+        _path = new address[](is_weth || is_internal ? 2 : 3);
         _path[0] = _token_in;
-        if (is_weth) {
+        if (is_weth || is_internal) {
             _path[1] = _token_out;
         } else {
             _path[1] = address(WETH);
@@ -538,15 +541,15 @@ abstract contract Joint {
         }
         // **WARNING**: This call is sandwichable, care should be taken
         //              to always execute with a private relay
-            IUniswapV2Router02(router).removeLiquidity(
-                tokenA,
-                tokenB,
-                balanceOfPair(),
-                0,
-                0,
-                address(this),
-                now
-            );
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
         return (balanceOfA(), balanceOfB());
     }
 
@@ -610,13 +613,22 @@ abstract contract Joint {
         _returnLooseToProviders();
     }
 
-    function swapTokenForToken(
-        address swapFrom,
-        address swapTo,
-        uint256 swapInAmount
-    ) external onlyGovernance returns (uint256) {
+    function swapTokenForToken(address[] memory swapPath, uint256 swapInAmount)
+        external
+        onlyGovernance
+        returns (uint256)
+    {
+        address swapTo = swapPath[swapPath.length - 1];
         require(swapTo == tokenA || swapTo == tokenB); // swapTo must be tokenA or tokenB
-        return sellCapital(swapFrom, swapTo, swapInAmount);
+        uint256[] memory amounts =
+            IUniswapV2Router02(router).swapExactTokensForTokens(
+                swapInAmount,
+                0,
+                swapPath,
+                address(this),
+                now
+            );
+        return amounts[amounts.length - 1];
     }
 
     function sweep(address _token) external onlyGovernance {
