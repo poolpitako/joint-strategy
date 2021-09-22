@@ -60,8 +60,8 @@ abstract contract Joint {
     uint256 public activePutID;
 
     uint256 public hedgeBudget = 50; // 0.5% per hedging period
-    uint256 private h = 1500; // 15%
-    uint256 private period = 7 days;
+    uint256 private h = 1000; // 10%
+    uint256 private period = 1 days;
 
     modifier onlyGovernance {
         require(
@@ -156,6 +156,10 @@ abstract contract Joint {
         IERC20(tokenB).approve(address(router), type(uint256).max);
         IERC20(reward).approve(address(router), type(uint256).max);
         IERC20(address(pair)).approve(address(router), type(uint256).max);
+
+        period = 1 days;
+        h = 1000;
+        hedgeBudget = 50;
     }
 
     event Cloned(address indexed clone);
@@ -277,7 +281,9 @@ abstract contract Joint {
         (investedA, investedB, ) = createLP();
         if (hedgeBudget > 0) {
             // take into account that if hedgeBudget is not enough, it will revert
-            hedgeLP();
+            (uint256 costCall, uint256 costPut) = hedgeLP();
+            investedA += costCall;
+            investedB += costPut;
         }
         depositLP();
 
@@ -354,8 +360,10 @@ abstract contract Joint {
         }
     }
 
-    function hedgeLP() internal {
+    function hedgeLP() internal returns (uint256, uint256) {
         IERC20 _pair = IERC20(getPair());
+        uint256 initialBalanceA = balanceOfA();
+        uint256 initialBalanceB = balanceOfB();
         // TODO: sell options if they are active
         require(activeCallID == 0 && activePutID == 0);
         (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(
@@ -363,6 +371,9 @@ abstract contract Joint {
             h,
             period
         );
+        uint256 costCall = initialBalanceA.sub(balanceOfA());
+        uint256 costPut = initialBalanceB.sub(balanceOfB());
+        return (costCall, costPut);
     }
 
     function calculateSellToBalance(

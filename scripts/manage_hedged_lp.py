@@ -1,12 +1,15 @@
 from brownie import Contract, accounts, chain, history
 import click
 
+dict = {
+        "ETH-USDC": Contract("0x7023Ae05e0FD6f7d6C7BbCB8b435BaF065Df3acD"),
+        "WBTC-USDC": Contract("0x7023Ae05e0FD6f7d6C7BbCB8b435BaF065Df3acD"),
+    }
+joint = dict[click.prompt("Joint", type=click.Choice(list(dict.keys())))]
+# account = accounts.load(click.prompt("Account", type=click.Choice(accounts.load())))
 
 def get_contract_and_account():
-    # account = accounts.load(click.prompt("Account", type=click.Choice(accounts.load())))
     account = accounts.at("0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7", force=True)
-    joint = Contract("0x7023Ae05e0FD6f7d6C7BbCB8b435BaF065Df3acD") # ETH-USDC
-    # joint = Contract("") # 
     providerA = Contract(joint.providerA())
     providerB = Contract(joint.providerB())
 
@@ -150,7 +153,6 @@ def print_status():
         print(f"\tPayout: {putPayout/1e6} {tokenB.symbol()}")
         return(callInfo[1]/1e8, (callInfo[4]-chain.time())/3600)
 
-    joint = Contract("0x7023Ae05e0FD6f7d6C7BbCB8b435BaF065Df3acD")
     pair = Contract(joint.pair())
     (reserve0, reserve1, l) = pair.getReserves()
     providerA = Contract(joint.providerA())

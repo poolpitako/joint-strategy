@@ -34,111 +34,6 @@ def sync_price(joint, mock_chainlink, strategist):
     (reserve0, reserve1, a) = pair.getReserves()
     mock_chainlink.setPrice(reserve0 / reserve1 * 1e12 * 10 ** 8, {"from": strategist})
 
-def x_test_operation_hedged(
-    chain,
-    vaultA,
-    vaultB,
-    tokenA,
-    tokenB,
-    amountA,
-    amountB,
-    providerA,
-    providerB,
-    joint,
-    strategist,
-    tokenA_whale,
-    tokenB_whale,
-    LPHedgingLibrary,
-    mock_chainlink,
-    oracle
-):
-    sync_price(joint, mock_chainlink, strategist)
-    print(f"Price according to Pair is {oracle.latestAnswer()/1e8}")
-
-    tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(amountA, {"from": tokenA_whale})
-
-    tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(amountB, {"from": tokenB_whale})
-
-    ppsA_start = vaultA.pricePerShare()
-    ppsB_start = vaultB.pricePerShare()
-
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-
-    print_hedge_status(joint, tokenA, tokenB)
-    # disabling this bc im paying for options and leaving uninvested funds (< 1%)
-    # assert xor(
-    #     providerA.balanceOfWant() > 0, providerB.balanceOfWant() > 0
-    # )  # exactly one should have some remainder
-    assert joint.balanceOfA() == 0
-    assert joint.balanceOfB() == 0
-    assert joint.balanceOfStake() > 0
-
-    investedA = (
-        vaultA.strategies(providerA).dict()["totalDebt"] - providerA.balanceOfWant()
-    )
-    investedB = (
-        vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
-    )
-
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
-    )
-
-    # Wait plz
-    chain.sleep(3600 * 24 * 7 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
-
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
-    )
-
-    # If there is any profit it should go to the providers
-    assert joint.pendingReward() > 0
-    # If joint doesn't reinvest, and providers do not invest want, the want
-    # will stay in the providers
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
-    providerA.setTakeProfit(True, {"from": strategist})
-    providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    gainA = vaultA.strategies(providerA).dict()["totalGain"]
-    gainB = vaultB.strategies(providerB).dict()["totalGain"]
-
-    assert gainA > 0
-    assert gainB > 0
-
-    returnA = gainA / investedA
-    returnB = gainB / investedB
-
-    print(
-        f"Return: {returnA*100:.5f}% {tokenA.symbol()} {returnB*100:.5f}% {tokenB.symbol()}"
-    )
-
-    assert pytest.approx(returnA, rel=50e-3) == returnB
-
-    # Harvest should be a no-op
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert vaultA.strategies(providerA).dict()["totalGain"] > 0
-    assert vaultB.strategies(providerB).dict()["totalGain"] > 0
-
-    assert vaultA.pricePerShare() > ppsA_start
-    assert vaultB.pricePerShare() > ppsB_start
-
 
 def test_operation_swap_a4b_hedged_light(
     chain,
@@ -193,10 +88,7 @@ def test_operation_swap_a4b_hedged_light(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
 
-    callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
-
-    investedA -= callCost
-    investedB -= putCost
+    print_hedge_status(joint, tokenA, tokenB)
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     dump_amountA = 3_000 * 1e18
@@ -223,8 +115,8 @@ def test_operation_swap_a4b_hedged_light(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 7 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 1 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
@@ -336,10 +228,8 @@ def test_operation_swap_a4b_hedged_heavy(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
     
-    callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
+    print_hedge_status(joint, tokenA, tokenB)
 
-    investedA -= callCost
-    investedB -= putCost
 
     tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
     print(
@@ -368,8 +258,8 @@ def test_operation_swap_a4b_hedged_heavy(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 7 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 1 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
@@ -473,13 +363,10 @@ def test_operation_swap_b4a_hedged_light(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
 
-    callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
-
-    investedA -= callCost
-    investedB -= putCost
+    print_hedge_status(joint, tokenA, tokenB)
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
-    dump_amountB = 10_000_000 * 1e6
+    dump_amountB = 7_000_000 * 1e6
     print(f"Dumping some tokenB. Selling {dump_amountB / 1e6} {tokenB.symbol()}")
 
     router.swapExactTokensForTokens(
@@ -504,8 +391,8 @@ def test_operation_swap_b4a_hedged_light(
     )
 
     # Wait plz
-    chain.sleep(3600 * 24 * 7 - 15 * 60)
-    chain.mine(int(3600 / 13) * 24 * 7 - int(60 * 15 / 13))
+    chain.sleep(3600 * 24 * 1 - 15 * 60)
+    chain.mine(int(3600 / 13) * 24 * 1 - int(60 * 15 / 13))
 
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
@@ -607,10 +494,8 @@ def test_operation_swap_b4a_hedged_heavy(
     print(
         f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e6} {tokenB.symbol()}"
     )
-    callCost, putCost = print_hedge_status(joint, tokenA, tokenB)
 
-    investedA -= callCost
-    investedB -= putCost
+    print_hedge_status(joint, tokenA, tokenB)
 
     tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
     print(
