@@ -30,7 +30,8 @@ library LPHedgingLib {
     address public constant hegicOptionsManager =
         0x1BA4b447d0dF64DA64024e5Ec47dA94458C1e97f;
 
-    address public constant asset1 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address public constant MAIN_ASSET =
+        0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     uint256 private constant MAX_BPS = 10_000;
 
@@ -76,9 +77,9 @@ library LPHedgingLib {
         }
 
         uint256 q;
-        if (asset1 == token0) {
+        if (MAIN_ASSET == token0) {
             q = token0Amount;
-        } else if (asset1 == token1) {
+        } else if (MAIN_ASSET == token1) {
             q = token1Amount;
         } else {
             revert("LPtoken not supported");
