@@ -119,11 +119,18 @@ def finish_epoch():
 
     harvest_providers(providerA, providerB, account)
 
-    print_status()
+    vaultA = Contract(providerA.vault())
+    vaultB = Contract(providerB.vault())
+
+    assert vaultA.strategies(providerA).dict()['totalDebt'] == 0
+    assert vaultB.strategies(providerB).dict()['totalDebt'] == 0
+
 
 def harvest_providers(providerA, providerB, account):
-    providerA.harvest({'from': account})
-    providerB.harvest({'from': account})
+    tx = providerA.harvest({'from': account})
+    print(tx.events["Harvested"])
+    tx = providerB.harvest({'from': account})
+    print(tx.events["Harvested"])
 
 
 def print_status():

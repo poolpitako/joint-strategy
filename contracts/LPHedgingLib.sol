@@ -34,14 +34,17 @@ library LPHedgingLib {
 
     uint256 private constant MAX_BPS = 10_000;
 
-    function _checkAllowance() internal {
-        // TODO: add correct check (currently checking uint256 max)
+    function _checkAllowance(
+        uint256 callAmount,
+        uint256 putAmount,
+        uint256 period
+    ) internal {
         IERC20 _token;
 
         _token = hegicCallOptionsPool.token();
         if (
             _token.allowance(address(hegicCallOptionsPool), address(this)) <
-            type(uint256).max
+            getOptionCost(hegicCallOptionsPool, period, callAmount)
         ) {
             _token.approve(address(hegicCallOptionsPool), type(uint256).max);
         }
@@ -49,7 +52,7 @@ library LPHedgingLib {
         _token = hegicPutOptionsPool.token();
         if (
             _token.allowance(address(hegicPutOptionsPool), address(this)) <
-            type(uint256).max
+            getOptionCost(hegicPutOptionsPool, period, putAmount)
         ) {
             _token.approve(address(hegicPutOptionsPool), type(uint256).max);
         }
@@ -83,11 +86,20 @@ library LPHedgingLib {
 
         (uint256 putAmount, uint256 callAmount) = getOptionsAmount(q, h);
 
-        // TODO: check enough liquidity available in options provider
-        // TODO: check enough balance to pay for this
-        _checkAllowance();
+        _checkAllowance(callAmount, putAmount, period);
         callID = buyOptionFrom(hegicCallOptionsPool, callAmount, period);
         putID = buyOptionFrom(hegicPutOptionsPool, putAmount, period);
+    }
+
+    function getOptionCost(
+        IHegicPool pool,
+        uint256 period,
+        uint256 amount
+    ) public view returns (uint256) {
+        // Strike = 0 means ATM option
+        (uint256 premium, uint256 settlementFee) =
+            pool.calculateTotalPremium(period, amount, 0);
+        return premium + settlementFee;
     }
 
     function getOptionsProfit(uint256 callID, uint256 putID)
@@ -119,22 +131,22 @@ library LPHedgingLib {
         uint256 callProfit = hegicCallOptionsPool.profitOf(callID);
         uint256 putProfit = hegicPutOptionsPool.profitOf(putID);
 
+        // Check the options have not expired
+        // NOTE: call and put options expiration MUST be the same
+        (, , , , uint256 expired, , ) = hegicCallOptionsPool.options(callID);
+        if (expired < block.timestamp) {
+            return (0, 0);
+        }
+
         if (callProfit > 0) {
             // call option is ITM
             hegicCallOptionsPool.exercise(callID);
-            // TODO: sell in secondary market
-        } else {
-            // TODO: sell in secondary market
         }
 
         if (putProfit > 0) {
             // put option is ITM
             hegicPutOptionsPool.exercise(putID);
-            // TODO: sell in secondary market
-        } else {
-            // TODO: sell in secondary market
         }
-        // TODO: return payout per token from exercise
     }
 
     function getOptionsAmount(uint256 q, uint256 h)

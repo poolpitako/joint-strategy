@@ -56,11 +56,13 @@ abstract contract Joint {
     uint256 private investedB;
 
     // HEDGING
+    bool public isHedgingDisabled;
+
     uint256 public activeCallID;
     uint256 public activePutID;
 
     uint256 public hedgeBudget = 50; // 0.5% per hedging period
-    uint256 private h = 1000; // 10%
+    uint256 private protectionRange = 1000; // 10%
     uint256 private period = 1 days;
 
     modifier onlyGovernance {
@@ -158,7 +160,7 @@ abstract contract Joint {
         IERC20(address(pair)).approve(address(router), type(uint256).max);
 
         period = 1 days;
-        h = 1000;
+        protectionRange = 1000;
         hedgeBudget = 50;
     }
 
@@ -222,9 +224,6 @@ abstract contract Joint {
                 }
             }
 
-            (uint256 ratioA, uint256 ratioB) =
-                getRatios(currentA, currentB, investedA, investedB);
-
             (address sellToken, uint256 sellAmount) =
                 calculateSellToBalance(
                     currentA,
@@ -248,13 +247,6 @@ abstract contract Joint {
                     currentB = currentB.sub(sellAmount);
                     currentA = currentA.add(buyAmount);
                 }
-
-                (ratioA, ratioB) = getRatios(
-                    currentA,
-                    currentB,
-                    investedA,
-                    investedB
-                );
             }
         }
 
@@ -279,7 +271,7 @@ abstract contract Joint {
         ); // don't create LP if we are already invested
 
         (investedA, investedB, ) = createLP();
-        if (hedgeBudget > 0) {
+        if (hedgeBudget > 0 && !isHedgingDisabled) {
             // take into account that if hedgeBudget is not enough, it will revert
             (uint256 costCall, uint256 costPut) = hedgeLP();
             investedA += costCall;
@@ -368,7 +360,7 @@ abstract contract Joint {
         require(activeCallID == 0 && activePutID == 0);
         (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(
             address(_pair),
-            h,
+            protectionRange,
             period
         );
         uint256 costCall = initialBalanceA.sub(balanceOfA());
@@ -576,7 +568,7 @@ abstract contract Joint {
             return (0, 0);
         }
         // only close hedge if a hedge is open
-        if (activeCallID != 0 && activePutID != 0) {
+        if (activeCallID != 0 && activePutID != 0 && !isHedgingDisabled) {
             LPHedgingLib.closeHedge(activeCallID, activePutID);
         }
 
@@ -675,9 +667,33 @@ abstract contract Joint {
         period = _period;
     }
 
-    function setProtectionRange(uint256 _h) external onlyAuthorized {
-        require(_h < RATIO_PRECISION);
-        h = _h;
+    function setProtectionRange(uint256 _protectionRange)
+        external
+        onlyAuthorized
+    {
+        require(_protectionRange < RATIO_PRECISION);
+        protectionRange = _protectionRange;
+    }
+
+    function withdrawFromMasterchef() external onlyAuthorized {
+        masterchef.withdraw(pid, balanceOfStake());
+    }
+
+    function removeLiquidity(uint256 amount) external onlyAuthorized {
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
+    }
+
+    function resetHedge() external onlyGovernance {
+        activeCallID = 0;
+        activePutID = 0;
     }
 
     function swapTokenForToken(
