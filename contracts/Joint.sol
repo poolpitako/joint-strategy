@@ -356,7 +356,6 @@ abstract contract Joint {
         IERC20 _pair = IERC20(getPair());
         uint256 initialBalanceA = balanceOfA();
         uint256 initialBalanceB = balanceOfB();
-        // TODO: sell options if they are active
         require(activeCallID == 0 && activePutID == 0);
         (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(
             address(_pair),

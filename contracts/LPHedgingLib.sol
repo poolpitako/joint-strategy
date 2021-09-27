@@ -64,7 +64,6 @@ library LPHedgingLib {
         uint256 h,
         uint256 period
     ) external returns (uint256 callID, uint256 putID) {
-        // TODO: check if this require makes sense
         (
             ,
             address token0,

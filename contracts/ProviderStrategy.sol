@@ -8,6 +8,7 @@ import {
     IERC20,
     Address
 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "../interfaces/uni/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 import {BaseStrategy} from "@yearnvaults/contracts/BaseStrategy.sol";
 
@@ -32,6 +33,10 @@ interface JointAPI {
         external
         view
         returns (uint256);
+
+    function WETH() external view returns (address);
+
+    function router() external view returns (address);
 }
 
 contract ProviderStrategy is BaseStrategy {
@@ -245,11 +250,48 @@ contract ProviderStrategy is BaseStrategy {
     function ethToWant(uint256 _amtInWei)
         public
         view
-        virtual
         override
         returns (uint256)
     {
-        // TODO create an accurate price oracle
-        return _amtInWei;
+        // NOTE: using joint params to avoid changing fixed values for other chains
+        // gas price is not important as this will only be used in triggers (queried from off-chain)
+        return tokenToWant(JointAPI(joint).WETH(), _amtInWei);
+    }
+
+    function tokenToWant(address token, uint256 amount)
+        internal
+        view
+        returns (uint256)
+    {
+        if (amount == 0 || address(want) == token) {
+            return amount;
+        }
+
+        uint256[] memory amounts =
+            IUniswapV2Router02(JointAPI(joint).router()).getAmountsOut(
+                amount,
+                getTokenOutPath(token, address(want))
+            );
+
+        return amounts[amounts.length - 1];
+    }
+
+    function getTokenOutPath(address _token_in, address _token_out)
+        internal
+        view
+        returns (address[] memory _path)
+    {
+        bool is_weth =
+            _token_in == address(JointAPI(joint).WETH()) ||
+                _token_out == address(JointAPI(joint).WETH());
+        _path = new address[](is_weth ? 2 : 3);
+        _path[0] = _token_in;
+
+        if (is_weth) {
+            _path[1] = _token_out;
+        } else {
+            _path[1] = address(JointAPI(joint).WETH());
+            _path[2] = _token_out;
+        }
     }
 }
