@@ -37,7 +37,6 @@ contract SushiJoint is Joint {
         string memory ab =
             string(
                 abi.encodePacked(
-                    "SushiJoint",
                     IERC20Extended(address(tokenA)).symbol(),
                     IERC20Extended(address(tokenB)).symbol()
                 )
