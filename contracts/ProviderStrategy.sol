@@ -8,6 +8,7 @@ import {
     IERC20,
     Address
 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "../interfaces/uni/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 import {BaseStrategy} from "@yearnvaults/contracts/BaseStrategy.sol";
 
@@ -32,6 +33,10 @@ interface JointAPI {
         external
         view
         returns (uint256);
+
+    function WETH() external view returns (address);
+
+    function router() external view returns (address);
 }
 
 contract ProviderStrategy is BaseStrategy {
@@ -132,30 +137,39 @@ contract ProviderStrategy is BaseStrategy {
             return (0, 0, 0);
         }
 
-        // If we reach this point, it means that we are winding down
-        // and we will take profit / losses or pay back debt
-        uint256 debt = vault.strategies(address(this)).totalDebt;
-        uint256 wantBalance = balanceOfWant();
+        uint256 totalDebt = vault.strategies(address(this)).totalDebt;
+        uint256 totalAssets = balanceOfWant();
 
-        // Set profit or loss based on the initial debt
-        if (debt <= wantBalance) {
-            _profit = wantBalance - debt;
+        if (totalDebt > totalAssets) {
+            // we have losses
+            _loss = totalDebt.sub(totalAssets);
         } else {
-            _loss = debt - wantBalance;
+            // we have profit
+            _profit = totalAssets.sub(totalDebt);
         }
 
-        // Repay debt. Amount will depend if we had profit or loss
-        if (_debtOutstanding > 0) {
-            if (_profit >= 0) {
-                _debtPayment = Math.min(
-                    _debtOutstanding,
-                    wantBalance.sub(_profit)
-                );
+        // free funds to repay debt + profit to the strategy
+        uint256 amountAvailable = totalAssets;
+        uint256 amountRequired = _debtOutstanding.add(_profit);
+
+        if (amountRequired > amountAvailable) {
+            if (amountAvailable < _debtOutstanding) {
+                // available funds are lower than the repayment that we need to do
+                _profit = 0;
+                _debtPayment = amountAvailable;
+                // we dont report losses here as the strategy might not be able to return in this harvest
+                // but it will still be there for the next harvest
             } else {
-                _debtPayment = Math.min(
-                    _debtOutstanding,
-                    wantBalance.sub(_loss)
-                );
+                // NOTE: amountRequired is always equal or greater than _debtOutstanding
+                // important to use amountRequired just in case amountAvailable is > amountAvailable
+                _debtPayment = _debtOutstanding;
+                _profit = amountAvailable.sub(_debtPayment);
+            }
+        } else {
+            _debtPayment = _debtOutstanding;
+            // profit remains unchanged unless there is not enough to pay it
+            if (amountRequired.sub(_debtPayment) < _profit) {
+                _profit = amountRequired.sub(_debtPayment);
             }
         }
     }
@@ -236,11 +250,48 @@ contract ProviderStrategy is BaseStrategy {
     function ethToWant(uint256 _amtInWei)
         public
         view
-        virtual
         override
         returns (uint256)
     {
-        // TODO create an accurate price oracle
-        return _amtInWei;
+        // NOTE: using joint params to avoid changing fixed values for other chains
+        // gas price is not important as this will only be used in triggers (queried from off-chain)
+        return tokenToWant(JointAPI(joint).WETH(), _amtInWei);
+    }
+
+    function tokenToWant(address token, uint256 amount)
+        internal
+        view
+        returns (uint256)
+    {
+        if (amount == 0 || address(want) == token) {
+            return amount;
+        }
+
+        uint256[] memory amounts =
+            IUniswapV2Router02(JointAPI(joint).router()).getAmountsOut(
+                amount,
+                getTokenOutPath(token, address(want))
+            );
+
+        return amounts[amounts.length - 1];
+    }
+
+    function getTokenOutPath(address _token_in, address _token_out)
+        internal
+        view
+        returns (address[] memory _path)
+    {
+        bool is_weth =
+            _token_in == address(JointAPI(joint).WETH()) ||
+                _token_out == address(JointAPI(joint).WETH());
+        _path = new address[](is_weth ? 2 : 3);
+        _path[0] = _token_in;
+
+        if (is_weth) {
+            _path[1] = _token_out;
+        } else {
+            _path[1] = address(JointAPI(joint).WETH());
+            _path[2] = _token_out;
+        }
     }
 }

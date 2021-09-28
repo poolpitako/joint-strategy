@@ -9,7 +9,7 @@ import {
     Address
 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
-
+import "./LPHedgingLib.sol";
 import "../interfaces/uni/IUniswapV2Router02.sol";
 import "../interfaces/uni/IUniswapV2Factory.sol";
 import "../interfaces/uni/IUniswapV2Pair.sol";
@@ -18,14 +18,6 @@ import "../interfaces/IMasterChef.sol";
 import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
 
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
-
-interface IERC20Extended {
-    function decimals() external view returns (uint8);
-
-    function name() external view returns (string memory);
-
-    function symbol() external view returns (string memory);
-}
 
 interface ProviderStrategy {
     function vault() external view returns (VaultAPI);
@@ -62,6 +54,16 @@ abstract contract Joint {
 
     uint256 private investedA;
     uint256 private investedB;
+
+    // HEDGING
+    bool public isHedgingDisabled;
+
+    uint256 public activeCallID;
+    uint256 public activePutID;
+
+    uint256 public hedgeBudget = 50; // 0.5% per hedging period
+    uint256 private protectionRange = 1000; // 10%
+    uint256 private period = 1 days;
 
     modifier onlyGovernance {
         require(
@@ -156,6 +158,10 @@ abstract contract Joint {
         IERC20(tokenB).approve(address(router), type(uint256).max);
         IERC20(reward).approve(address(router), type(uint256).max);
         IERC20(address(pair)).approve(address(router), type(uint256).max);
+
+        period = 1 days;
+        protectionRange = 1000;
+        hedgeBudget = 50;
     }
 
     event Cloned(address indexed clone);
@@ -202,10 +208,10 @@ abstract contract Joint {
     function name() external view virtual returns (string memory) {}
 
     function prepareReturn(bool returnFunds) external onlyProviders {
-        // If we have previously invested funds, let's distrubute PnL equally in
+        // If we have previously invested funds, let's distribute PnL equally in
         // each token's own terms
         if (investedA != 0 && investedB != 0) {
-            // Liquidate will also claim rewards
+            // Liquidate will also claim rewards & close hedge
             (uint256 currentA, uint256 currentB) = _liquidatePosition();
 
             if (tokenA != reward && tokenB != reward) {
@@ -217,9 +223,6 @@ abstract contract Joint {
                     currentB = currentB.add(rewardSwapOutAmount);
                 }
             }
-
-            (uint256 ratioA, uint256 ratioB) =
-                getRatios(currentA, currentB, investedA, investedB);
 
             (address sellToken, uint256 sellAmount) =
                 calculateSellToBalance(
@@ -244,13 +247,6 @@ abstract contract Joint {
                     currentB = currentB.sub(sellAmount);
                     currentA = currentA.add(buyAmount);
                 }
-
-                (ratioA, ratioB) = getRatios(
-                    currentA,
-                    currentB,
-                    investedA,
-                    investedB
-                );
             }
         }
 
@@ -275,11 +271,21 @@ abstract contract Joint {
         ); // don't create LP if we are already invested
 
         (investedA, investedB, ) = createLP();
+        if (hedgeBudget > 0 && !isHedgingDisabled) {
+            // take into account that if hedgeBudget is not enough, it will revert
+            (uint256 costCall, uint256 costPut) = hedgeLP();
+            investedA += costCall;
+            investedB += costPut;
+        }
         depositLP();
 
         if (balanceOfStake() != 0 || balanceOfPair() != 0) {
             _returnLooseToProviders();
         }
+    }
+
+    function getOptionsProfit() public view returns (uint256, uint256) {
+        return LPHedgingLib.getOptionsProfit(activeCallID, activePutID);
     }
 
     function estimatedTotalAssetsAfterBalance()
@@ -293,6 +299,10 @@ abstract contract Joint {
 
         _aBalance = _aBalance.add(balanceOfA());
         _bBalance = _bBalance.add(balanceOfB());
+
+        (uint256 callProfit, uint256 putProfit) = getOptionsProfit();
+        _aBalance = _aBalance.add(callProfit);
+        _bBalance = _bBalance.add(putProfit);
 
         if (reward == tokenA) {
             _aBalance = _aBalance.add(rewardsPending);
@@ -340,6 +350,21 @@ abstract contract Joint {
         } else if (token == tokenB) {
             (, _balance) = estimatedTotalAssetsAfterBalance();
         }
+    }
+
+    function hedgeLP() internal returns (uint256, uint256) {
+        IERC20 _pair = IERC20(getPair());
+        uint256 initialBalanceA = balanceOfA();
+        uint256 initialBalanceB = balanceOfB();
+        require(activeCallID == 0 && activePutID == 0);
+        (activeCallID, activePutID) = LPHedgingLib.hedgeLPToken(
+            address(_pair),
+            protectionRange,
+            period
+        );
+        uint256 costCall = initialBalanceA.sub(balanceOfA());
+        uint256 costPut = initialBalanceB.sub(balanceOfB());
+        return (costCall, costPut);
     }
 
     function calculateSellToBalance(
@@ -450,8 +475,12 @@ abstract contract Joint {
             IUniswapV2Router02(router).addLiquidity(
                 tokenA,
                 tokenB,
-                balanceOfA(),
-                balanceOfB(),
+                balanceOfA().mul(RATIO_PRECISION.sub(hedgeBudget)).div(
+                    RATIO_PRECISION
+                ),
+                balanceOfB().mul(RATIO_PRECISION.sub(hedgeBudget)).div(
+                    RATIO_PRECISION
+                ),
                 0,
                 0,
                 address(this),
@@ -533,20 +562,28 @@ abstract contract Joint {
         if (balanceOfStake() != 0) {
             masterchef.withdraw(pid, balanceOfStake());
         }
+
         if (balanceOfPair() == 0) {
             return (0, 0);
         }
+        // only close hedge if a hedge is open
+        if (activeCallID != 0 && activePutID != 0 && !isHedgingDisabled) {
+            LPHedgingLib.closeHedge(activeCallID, activePutID);
+        }
+
+        activeCallID = 0;
+        activePutID = 0;
         // **WARNING**: This call is sandwichable, care should be taken
         //              to always execute with a private relay
-            IUniswapV2Router02(router).removeLiquidity(
-                tokenA,
-                tokenB,
-                balanceOfPair(),
-                0,
-                0,
-                address(this),
-                now
-            );
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
         return (balanceOfA(), balanceOfB());
     }
 
@@ -560,6 +597,15 @@ abstract contract Joint {
         if (balanceB > 0) {
             IERC20(tokenB).transfer(address(providerB), balanceB);
         }
+    }
+
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) public pure virtual returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 
     function getPair() internal view returns (address) {
@@ -608,6 +654,45 @@ abstract contract Joint {
 
     function returnLooseToProviders() external onlyAuthorized {
         _returnLooseToProviders();
+    }
+
+    function setHedgeBudget(uint256 _hedgeBudget) external onlyAuthorized {
+        require(_hedgeBudget < RATIO_PRECISION);
+        hedgeBudget = _hedgeBudget;
+    }
+
+    function setHedgingPeriod(uint256 _period) external onlyAuthorized {
+        require(_period < 90 days);
+        period = _period;
+    }
+
+    function setProtectionRange(uint256 _protectionRange)
+        external
+        onlyAuthorized
+    {
+        require(_protectionRange < RATIO_PRECISION);
+        protectionRange = _protectionRange;
+    }
+
+    function withdrawFromMasterchef() external onlyAuthorized {
+        masterchef.withdraw(pid, balanceOfStake());
+    }
+
+    function removeLiquidity(uint256 amount) external onlyAuthorized {
+        IUniswapV2Router02(router).removeLiquidity(
+            tokenA,
+            tokenB,
+            balanceOfPair(),
+            0,
+            0,
+            address(this),
+            now
+        );
+    }
+
+    function resetHedge() external onlyGovernance {
+        activeCallID = 0;
+        activePutID = 0;
     }
 
     function swapTokenForToken(
