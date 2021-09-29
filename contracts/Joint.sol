@@ -160,7 +160,7 @@ abstract contract Joint {
         IERC20(address(pair)).approve(address(router), type(uint256).max);
 
         period = 1 days;
-        protectionRange = 1000;
+        protectionRange = 1_000;
         hedgeBudget = 50;
     }
 
@@ -654,6 +654,16 @@ abstract contract Joint {
 
     function returnLooseToProviders() external onlyAuthorized {
         _returnLooseToProviders();
+    }
+
+    function setIsHedgingDisabled(bool _isHedgingDisabled, bool force)
+        external
+        onlyAuthorized
+    {
+        // if there is an active hedge, we need to force the disabling
+        if (force || (activeCallID == 0 && activePutID == 0)) {
+            isHedgingDisabled = _isHedgingDisabled;
+        }
     }
 
     function setHedgeBudget(uint256 _hedgeBudget) external onlyAuthorized {
