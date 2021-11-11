@@ -1,273 +1,161 @@
 import brownie
+from brownie import Contract
 import pytest
-from brownie import Contract, Wei
-from operator import xor
-from utils import sync_price, print_hedge_status
+from utils import actions, checks, utils
 
 
 def test_operation(
     chain,
-    vaultA,
-    vaultB,
+    accounts,
     tokenA,
     tokenB,
-    amountA,
-    amountB,
+    vaultA,
+    vaultB,
     providerA,
     providerB,
     joint,
+    user,
     strategist,
-    tokenA_whale,
-    tokenB_whale,
-    mock_chainlink,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
 ):
-    sync_price(joint, mock_chainlink, strategist)
+    # run two epochs
 
-    tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(amountA, {"from": tokenA_whale})
+    # start epoch
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
 
-    tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(amountB, {"from": tokenB_whale})
-
-    ppsA_start = vaultA.pricePerShare()
-    ppsB_start = vaultB.pricePerShare()
-
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    print_hedge_status(joint, tokenA, tokenB)
-    assert joint.balanceOfA() == 0
-    assert joint.balanceOfB() == 0
-    assert joint.balanceOfStake() > 0
-
-    investedA = (
-        vaultA.strategies(providerA).dict()["totalDebt"] - providerA.balanceOfWant()
-    )
-    investedB = (
-        vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
 
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
+    assert joint.getTimeToMaturity() > 0
+
+    # we set back the debt ratios
+    vaultA.updateStrategyDebtRatio(providerA, 10_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 10_000, {"from": gov})
+
+    # wait for epoch to finish
+    actions.wait_period_fraction(joint, 0.75)
+
+    # restart epoch
+    # using start epoch because it is the same and start sets debt ratios to 0
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
 
-    # Wait plz
-    chain.sleep(3600 * 24 - 30)
-    chain.mine(int(3600 / 13) * 24)
+    assert joint.getTimeToMaturity() > 0
 
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
-    )
+    # wait for epoch to finish
+    actions.wait_period_fraction(joint, 0.75)
 
-    # If there is any profit it should go to the providers
-    assert joint.pendingReward() > 0
-    # If joint doesn't reinvest, and providers do not invest want, the want
-    # will stay in the providers
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
-    providerA.setTakeProfit(True, {"from": strategist})
-    providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
+    # end epoch and return funds to vault
+    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
 
-    # Harvest should be a no-op
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    # losses due to not being able to earn enough to cover hedge without trades!
-    assert vaultA.strategies(providerA).dict()["totalLoss"] > 0
-    assert vaultB.strategies(providerB).dict()["totalLoss"] > 0
+    assert providerA.balanceOfWant() == 0
 
 
-def test_operation_swap_a4b(
+# debt ratios should not be increased in the middle of an epoch
+def test_increase_debt_ratio(
     chain,
-    vaultA,
-    vaultB,
+    accounts,
     tokenA,
     tokenB,
-    amountA,
-    amountB,
+    vaultA,
+    vaultB,
     providerA,
     providerB,
     joint,
-    router,
+    user,
     strategist,
-    tokenA_whale,
-    tokenB_whale,
-    mock_chainlink,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
 ):
-    sync_price(joint, mock_chainlink, strategist)
-    tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(amountA, {"from": tokenA_whale})
+    # set debt ratios to 50% and 50%
+    vaultA.updateStrategyDebtRatio(providerA, 5_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 5_000, {"from": gov})
 
-    tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(amountB, {"from": tokenB_whale})
+    # start epoch
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
 
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
+    # to avoid autoprotect due to time to maturitiy
+    joint.setAutoProtectionDisabled(True, {"from": gov})
 
-    assert joint.balanceOfA() == 0
-    assert joint.balanceOfB() == 0
-    assert joint.balanceOfStake() > 0
-
-    investedA = (
-        vaultA.strategies(providerA).dict()["totalDebt"] - providerA.balanceOfWant()
-    )
-    investedB = (
-        vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
-    )
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA / 2, amountB / 2
     )
 
-    tokenA.approve(router, 2 ** 256 - 1, {"from": tokenA_whale})
-    router.swapExactTokensForTokens(
-        tokenA.balanceOf(tokenA_whale),
-        0,
-        [tokenA, tokenB],
-        tokenA_whale,
-        2 ** 256 - 1,
-        {"from": tokenA_whale},
+    # set debt ratios to 100% and 100%
+    vaultA.updateStrategyDebtRatio(providerA, 10_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 10_000, {"from": gov})
+
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
+
+    # restart epoch
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
 
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
-    )
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
 
-    # Wait plz
-    chain.sleep(3600 * 24 - 30)
-    chain.mine(int(3600 * 24 / 13) - 30)
+    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
 
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
-    )
-
-    # If there is any profit it should go to the providers
-    assert joint.pendingReward() > 0
-    # If joint doesn't reinvest, and providers do not invest want, the want
-    # will stay in the providers
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
-    providerA.setTakeProfit(True, {"from": strategist})
-    providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    lossA = vaultA.strategies(providerA).dict()["totalLoss"]
-    lossB = vaultB.strategies(providerB).dict()["totalLoss"]
-
-    assert lossA > 0
-    assert lossB > 0
-
-    returnA = -lossA / investedA
-    returnB = -lossB / investedB
-
-    print(
-        f"Return: {returnA*100:.5f}% {tokenA.symbol()} {returnB*100:.5f}% {tokenB.symbol()}"
-    )
-
-    assert pytest.approx(returnA, rel=50e-3) == returnB
+    assert vaultA.strategies(providerA).dict()["totalDebt"] == 0
+    assert vaultB.strategies(providerB).dict()["totalDebt"] == 0
 
 
-def test_operation_swap_b4a(
+# debt ratios should not be increased in the middle of an epoch
+def test_decrease_debt_ratio(
     chain,
-    vaultA,
-    vaultB,
+    accounts,
     tokenA,
     tokenB,
-    amountA,
-    amountB,
+    vaultA,
+    vaultB,
     providerA,
     providerB,
     joint,
-    router,
+    user,
     strategist,
-    tokenA_whale,
-    tokenB_whale,
-    mock_chainlink,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
 ):
-    sync_price(joint, mock_chainlink, strategist)
+    # start epoch
 
-    tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit(amountA, {"from": tokenA_whale})
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
 
-    tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit(amountB, {"from": tokenB_whale})
-
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-
-    assert joint.balanceOfA() == 0
-    assert joint.balanceOfB() == 0
-    assert joint.balanceOfStake() > 0
-
-    investedA = (
-        vaultA.strategies(providerA).dict()["totalDebt"] - providerA.balanceOfWant()
-    )
-    investedB = (
-        vaultB.strategies(providerB).dict()["totalDebt"] - providerB.balanceOfWant()
-    )
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
 
-    tokenB.approve(router, 2 ** 256 - 1, {"from": tokenB_whale})
-    router.swapExactTokensForTokens(
-        tokenB.balanceOf(tokenB_whale),
-        0,
-        [tokenB, tokenA],
-        tokenB_whale,
-        2 ** 256 - 1,
-        {"from": tokenB_whale},
+    # to avoid autoprotect due to time to maturitiy
+    joint.setAutoProtectionDisabled(True, {"from": gov})
+    # set debt ratios to 50% and 50%
+    vaultA.updateStrategyDebtRatio(providerA, 5_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 5_000, {"from": gov})
+
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
+
+    # restart epoch
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA / 2, amountB / 2
     )
 
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
-    )
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
 
-    # Wait plz
-    chain.sleep(3600 * 24)
-    chain.mine(int(3600 * 24 / 13) - 30)
+    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
 
-    print(
-        f"Joint estimated assets: {joint.estimatedTotalAssetsInToken(tokenA) / 1e18} {tokenA.symbol()} and {joint.estimatedTotalAssetsInToken(tokenB) / 1e18} {tokenB.symbol()}"
-    )
-
-    # If there is any profit it should go to the providers
-    assert joint.pendingReward() > 0
-    # If joint doesn't reinvest, and providers do not invest want, the want
-    # will stay in the providers
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
-    providerA.setTakeProfit(True, {"from": strategist})
-    providerB.setTakeProfit(True, {"from": strategist})
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    lossA = vaultA.strategies(providerA).dict()["totalLoss"]
-    lossB = vaultB.strategies(providerB).dict()["totalLoss"]
-
-    assert lossA > 0
-    assert lossB > 0
-
-    returnA = -lossA / investedA
-    returnB = -lossB / investedB
-
-    print(
-        f"Return: {returnA*100:.5f}% {tokenA.symbol()} {returnB*100:.5f}% {tokenB.symbol()}"
-    )
-
-    assert pytest.approx(returnA, rel=50e-3) == returnB
+    assert vaultA.strategies(providerA).dict()["totalDebt"] == 0
+    assert vaultB.strategies(providerB).dict()["totalDebt"] == 0
