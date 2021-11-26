@@ -93,7 +93,7 @@ abstract contract HedgilJoint is Joint {
     }
 
     function getHedgeProfit() public view override returns (uint256, uint256) {
-        return (IHedgilPool(hedgilPool).getHedgeProfit(activeHedgeID), 0);
+        return (0, IHedgilPool(hedgilPool).getCurrentPayout(activeHedgeID));
     }
 
     function setSkipManipulatedCheck(bool _skipManipulatedCheck)
