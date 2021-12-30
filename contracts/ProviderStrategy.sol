@@ -8,93 +8,54 @@ import {
     IERC20,
     Address
 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "../interfaces/uni/IUniswapV2Router02.sol";
+import "../interfaces/IERC20Extended.sol";
 import "@openzeppelin/contracts/math/Math.sol";
-import {BaseStrategy} from "@yearnvaults/contracts/BaseStrategy.sol";
+import {
+    BaseStrategyInitializable
+} from "@yearnvaults/contracts/BaseStrategy.sol";
 
-interface IERC20Extended {
-    function decimals() external view returns (uint8);
+interface JointAPI {
+    function closePositionReturnFunds() external;
 
-    function name() external view returns (string memory);
+    function openPosition() external;
 
-    function symbol() external view returns (string memory);
+    function providerA() external view returns (address);
+
+    function providerB() external view returns (address);
+
+    function estimatedTotalAssetsInToken(address token)
+        external
+        view
+        returns (uint256);
+
+    function WETH() external view returns (address);
+
+    function router() external view returns (address);
+
+    function migrateProvider(address _newProvider) external view;
+
+    function shouldEndEpoch() external view returns (bool);
+
+    function dontInvestWant() external view returns (bool);
 }
 
-contract ProviderStrategy is BaseStrategy {
+contract ProviderStrategy is BaseStrategyInitializable {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
     address public joint;
-    bool public takeProfit;
-    bool public investWant;
 
-    constructor(address _vault, address _joint) public BaseStrategy(_vault) {
-        _initializeStrat(_joint);
-    }
+    bool public forceLiquidate;
 
-    function initialize(
-        address _vault,
-        address _strategist,
-        address _rewards,
-        address _keeper,
-        address _joint
-    ) external {
-        _initialize(_vault, _strategist, _rewards, _keeper);
-        _initializeStrat(_joint);
-    }
-
-    function _initializeStrat(address _joint) internal {
-        require(
-            address(joint) == address(0),
-            "ProviderStrategy already initialized"
-        );
-        joint = _joint;
-        investWant = true;
-        takeProfit = false;
-    }
-
-    event Cloned(address indexed clone);
-
-    function cloneProviderStrategy(
-        address _vault,
-        address _strategist,
-        address _rewards,
-        address _keeper,
-        address _joint
-    ) external returns (address newStrategy) {
-        bytes20 addressBytes = bytes20(address(this));
-
-        assembly {
-            // EIP-1167 bytecode
-            let clone_code := mload(0x40)
-            mstore(
-                clone_code,
-                0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
-            )
-            mstore(add(clone_code, 0x14), addressBytes)
-            mstore(
-                add(clone_code, 0x28),
-                0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
-            )
-            newStrategy := create(0, clone_code, 0x37)
-        }
-
-        ProviderStrategy(newStrategy).initialize(
-            _vault,
-            _strategist,
-            _rewards,
-            _keeper,
-            _joint
-        );
-
-        emit Cloned(newStrategy);
-    }
+    constructor(address _vault) public BaseStrategyInitializable(_vault) {}
 
     function name() external view override returns (string memory) {
         return
             string(
                 abi.encodePacked(
-                    "ProviderOf",
+                    "Strategy_ProviderOf",
                     IERC20Extended(address(want)).symbol(),
                     "To",
                     IERC20Extended(address(joint)).name()
@@ -103,7 +64,14 @@ contract ProviderStrategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        return want.balanceOf(address(this));
+        return
+            want.balanceOf(address(this)).add(
+                JointAPI(joint).estimatedTotalAssetsInToken(address(want))
+            );
+    }
+
+    function totalDebt() public view returns (uint256) {
+        return vault.strategies(address(this)).totalDebt;
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -115,54 +83,73 @@ contract ProviderStrategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-        // if we are not taking profit, there is nothing to do
-        if (!takeProfit) {
-            return (0, 0, 0);
-        }
+        // NOTE: this strategy is operated following epochs. These begin during adjustPosition and end during prepareReturn
+        // The Provider will always ask the joint to close the position before harvesting
+        JointAPI(joint).closePositionReturnFunds();
 
-        // If we reach this point, it means that we are winding down
-        // and we will take profit / losses or pay back debt
+        // After closePosition, the provider will always have funds in its own balance (not in joint)
+        uint256 _totalDebt = totalDebt();
+        uint256 totalAssets = balanceOfWant();
 
-        uint256 debt = vault.strategies(address(this)).totalDebt;
-        uint256 wantBalance = balanceOfWant();
-
-        // Set profit or loss based on the initial debt
-        if (debt <= wantBalance) {
-            _profit = wantBalance - debt;
+        if (_totalDebt > totalAssets) {
+            // we have losses
+            _loss = _totalDebt.sub(totalAssets);
         } else {
-            _loss = debt - wantBalance;
+            // we have profit
+            _profit = totalAssets.sub(_totalDebt);
         }
 
-        // Repay debt. Amount will depend if we had profit or loss
-        if (_debtOutstanding > 0) {
-            if (_profit >= 0) {
-                _debtPayment = Math.min(
-                    _debtOutstanding,
-                    wantBalance.sub(_profit)
-                );
+        uint256 amountAvailable = totalAssets;
+        uint256 amountRequired = _debtOutstanding.add(_profit);
+
+        if (amountRequired > amountAvailable) {
+            if (_debtOutstanding > amountAvailable) {
+                // available funds are lower than the repayment that we need to do
+                _profit = 0;
+                _debtPayment = amountAvailable;
+                // we dont report losses here as the strategy might not be able to return in this harvest
+                // but it will still be there for the next harvest
             } else {
-                _debtPayment = Math.min(
-                    _debtOutstanding,
-                    wantBalance.sub(_loss)
-                );
+                // NOTE: amountRequired is always equal or greater than _debtOutstanding
+                // important to use amountAvailable just in case amountRequired is > amountAvailable
+                _debtPayment = _debtOutstanding;
+                _profit = amountAvailable.sub(_debtPayment);
+            }
+        } else {
+            _debtPayment = _debtOutstanding;
+            // profit remains unchanged unless there is not enough to pay it
+            if (amountRequired.sub(_debtPayment) < _profit) {
+                _profit = amountRequired.sub(_debtPayment);
             }
         }
     }
 
+    function harvestTrigger(uint256 callCost)
+        public
+        view
+        override
+        returns (bool)
+    {
+        // Delegating decision to joint
+        return JointAPI(joint).shouldEndEpoch();
+    }
+
+    function dontInvestWant() public view returns (bool) {
+        // Delegating decision to joint
+        return JointAPI(joint).dontInvestWant();
+    }
+
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        if (emergencyExit) {
+        if (emergencyExit || dontInvestWant()) {
             return;
         }
 
-        // If we shouldn't invest, don't do it :D
-        if (!investWant) {
-            return;
-        }
-
+        // Using a push approach (instead of pull)
         uint256 wantBalance = balanceOfWant();
         if (wantBalance > 0) {
             want.transfer(joint, wantBalance);
         }
+        JointAPI(joint).openPosition();
     }
 
     function liquidatePosition(uint256 _amountNeeded)
@@ -170,18 +157,17 @@ contract ProviderStrategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        uint256 totalAssets = want.balanceOf(address(this));
-        if (_amountNeeded > totalAssets) {
-            _liquidatedAmount = totalAssets;
-            _loss = _amountNeeded.sub(totalAssets);
+        uint256 availableAssets = want.balanceOf(address(this));
+        if (_amountNeeded > availableAssets) {
+            _liquidatedAmount = availableAssets;
+            _loss = _amountNeeded.sub(availableAssets);
         } else {
             _liquidatedAmount = _amountNeeded;
         }
     }
 
     function prepareMigration(address _newStrategy) internal override {
-        // Want is sent to the new strategy in the base class
-        // nothing to do here
+        JointAPI(joint).migrateProvider(_newStrategy);
     }
 
     function protectedTokens()
@@ -196,14 +182,83 @@ contract ProviderStrategy is BaseStrategy {
     }
 
     function setJoint(address _joint) external onlyGovernance {
+        require(
+            JointAPI(_joint).providerA() == address(this) ||
+                JointAPI(_joint).providerB() == address(this)
+        ); // dev: providers uncorrectly set
+        require(healthCheck != address(0)); // dev: healthCheck
         joint = _joint;
     }
 
-    function setTakeProfit(bool _takeProfit) external onlyAuthorized {
-        takeProfit = _takeProfit;
+    function setForceLiquidate(bool _forceLiquidate)
+        external
+        onlyEmergencyAuthorized
+    {
+        forceLiquidate = _forceLiquidate;
     }
 
-    function setInvestWant(bool _investWant) external onlyAuthorized {
-        investWant = _investWant;
+    function liquidateAllPositions()
+        internal
+        virtual
+        override
+        returns (uint256 _amountFreed)
+    {
+        uint256 expectedBalance = estimatedTotalAssets();
+        JointAPI(joint).closePositionReturnFunds();
+        _amountFreed = balanceOfWant();
+        // NOTE: we accept a 1% difference before reverting
+        require(
+            forceLiquidate ||
+                expectedBalance.mul(9_900).div(10_000) < _amountFreed,
+            "!liquidation"
+        );
+    }
+
+    function ethToWant(uint256 _amtInWei)
+        public
+        view
+        override
+        returns (uint256)
+    {
+        // NOTE: using joint params to avoid changing fixed values for other chains
+        // gas price is not important as this will only be used in triggers (queried from off-chain)
+        return tokenToWant(JointAPI(joint).WETH(), _amtInWei);
+    }
+
+    function tokenToWant(address token, uint256 amount)
+        internal
+        view
+        returns (uint256)
+    {
+        if (amount == 0 || address(want) == token) {
+            return amount;
+        }
+
+        uint256[] memory amounts =
+            IUniswapV2Router02(JointAPI(joint).router()).getAmountsOut(
+                amount,
+                getTokenOutPath(token, address(want))
+            );
+
+        return amounts[amounts.length - 1];
+    }
+
+    function getTokenOutPath(address _token_in, address _token_out)
+        internal
+        view
+        returns (address[] memory _path)
+    {
+        bool is_weth =
+            _token_in == address(JointAPI(joint).WETH()) ||
+                _token_out == address(JointAPI(joint).WETH());
+        _path = new address[](is_weth ? 2 : 3);
+        _path[0] = _token_in;
+
+        if (is_weth) {
+            _path[1] = _token_out;
+        } else {
+            _path[1] = address(JointAPI(joint).WETH());
+            _path[2] = _token_out;
+        }
     }
 }

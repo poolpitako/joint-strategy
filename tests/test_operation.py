@@ -1,98 +1,161 @@
 import brownie
+from brownie import Contract
 import pytest
-from brownie import Contract, Wei
+from utils import actions, checks, utils
 
 
 def test_operation(
     chain,
-    vaultA,
-    vaultB,
+    accounts,
     tokenA,
     tokenB,
+    vaultA,
+    vaultB,
     providerA,
     providerB,
     joint,
-    gov,
+    user,
     strategist,
-    tokenA_whale,
-    tokenB_whale,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
 ):
+    # run two epochs
 
-    tokenA.approve(vaultA, 2 ** 256 - 1, {"from": tokenA_whale})
-    vaultA.deposit({"from": tokenA_whale})
+    # start epoch
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
 
-    tokenB.approve(vaultB, 2 ** 256 - 1, {"from": tokenB_whale})
-    vaultB.deposit({"from": tokenB_whale})
-
-    # https://www.coingecko.com/en/coins/fantom
-    tokenA_price = 0.45
-    # https://www.coingecko.com/en/coins/popsicle-finance
-    tokenB_price = 3.68
-    usd_amount = Wei("1000 ether")
-
-    vaultA.updateStrategyMaxDebtPerHarvest(
-        providerA, usd_amount // tokenA_price, {"from": vaultA.governance()}
-    )
-    vaultB.updateStrategyMaxDebtPerHarvest(
-        providerB, usd_amount // tokenB_price, {"from": vaultB.governance()}
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
 
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    assert joint.balanceOfA() * usd_amount > Wei("990 ether")
-    assert joint.balanceOfB() * usd_amount > Wei("990 ether")
+    assert joint.getTimeToMaturity() > 0
 
-    print(f"Joint has {joint.balanceOfA()/1e18} wftm and {joint.balanceOfB()/1e18} ice")
-    joint.harvest({"from": strategist})
-    assert joint.balanceOfStake() > 0
+    # we set back the debt ratios
+    vaultA.updateStrategyDebtRatio(providerA, 10_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 10_000, {"from": gov})
 
-    # Wait plz
-    chain.sleep(60 * 60 * 24 * 5)
-    chain.mine(50)
+    # wait for epoch to finish
+    actions.wait_period_fraction(joint, 0.75)
 
-    # If there is any profit it should go to the providers
-    assert joint.pendingReward() > 0
-    # If joint doesn't reinvest, and providers do not invest want, the want
-    # will stay in the providers
-    joint.setReinvest(False, {"from": strategist})
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
-    joint.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-
-    # Harvest should be a no-op
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
-    assert vaultA.strategies(providerA).dict()["totalGain"] == 0
-    assert vaultB.strategies(providerB).dict()["totalGain"] == 0
-
-    # Liquidate position and make sure capital + profit is back
-    joint.liquidatePosition({"from": strategist})
-    print(
-        f"After liquidation, Joint has {joint.balanceOfA()/1e18} wftm and {joint.balanceOfB()/1e18} ice"
+    # restart epoch
+    # using start epoch because it is the same and start sets debt ratios to 0
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
-    print(f"ProviderA: {providerA.balanceOfWant()/1e18}")
-    print(f"ProviderB: {providerB.balanceOfWant()/1e18}")
-    providerA.setTakeProfit(True, {"from": strategist})
-    providerB.setTakeProfit(True, {"from": strategist})
-    providerA.setInvestWant(False, {"from": strategist})
-    providerB.setInvestWant(False, {"from": strategist})
 
-    joint.harvest({"from": strategist})
-    assert providerA.balanceOfWant() > 0
-    assert providerB.balanceOfWant() > 0
+    assert joint.getTimeToMaturity() > 0
 
-    providerA.harvest({"from": strategist})
-    providerB.harvest({"from": strategist})
-    chain.sleep(60 * 60 * 8)
-    chain.mine(1)
-    assert vaultA.strategies(providerA).dict()["totalGain"] > 0
-    assert vaultB.strategies(providerB).dict()["totalGain"] > 0
+    # wait for epoch to finish
+    actions.wait_period_fraction(joint, 0.75)
 
-    print(f"wFTM profit: {vaultA.strategies(providerA).dict()['totalGain']/1e18} wftm")
-    print(f"ice profit: {vaultB.strategies(providerB).dict()['totalGain']/1e18} ice")
+    # end epoch and return funds to vault
+    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+
+    assert providerA.balanceOfWant() == 0
+
+
+# debt ratios should not be increased in the middle of an epoch
+def test_increase_debt_ratio(
+    chain,
+    accounts,
+    tokenA,
+    tokenB,
+    vaultA,
+    vaultB,
+    providerA,
+    providerB,
+    joint,
+    user,
+    strategist,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
+):
+    # set debt ratios to 50% and 50%
+    vaultA.updateStrategyDebtRatio(providerA, 5_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 5_000, {"from": gov})
+
+    # start epoch
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
+
+    # to avoid autoprotect due to time to maturitiy
+    joint.setAutoProtectionDisabled(True, {"from": gov})
+
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA / 2, amountB / 2
+    )
+
+    # set debt ratios to 100% and 100%
+    vaultA.updateStrategyDebtRatio(providerA, 10_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 10_000, {"from": gov})
+
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
+
+    # restart epoch
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
+    )
+
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
+
+    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+
+    assert vaultA.strategies(providerA).dict()["totalDebt"] == 0
+    assert vaultB.strategies(providerB).dict()["totalDebt"] == 0
+
+
+# debt ratios should not be increased in the middle of an epoch
+def test_decrease_debt_ratio(
+    chain,
+    accounts,
+    tokenA,
+    tokenB,
+    vaultA,
+    vaultB,
+    providerA,
+    providerB,
+    joint,
+    user,
+    strategist,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
+):
+    # start epoch
+
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
+
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
+    )
+
+    # to avoid autoprotect due to time to maturitiy
+    joint.setAutoProtectionDisabled(True, {"from": gov})
+    # set debt ratios to 50% and 50%
+    vaultA.updateStrategyDebtRatio(providerA, 5_000, {"from": gov})
+    vaultB.updateStrategyDebtRatio(providerB, 5_000, {"from": gov})
+
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
+
+    # restart epoch
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA / 2, amountB / 2
+    )
+
+    providerA.setDoHealthCheck(False, {"from": gov})
+    providerB.setDoHealthCheck(False, {"from": gov})
+
+    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+
+    assert vaultA.strategies(providerA).dict()["totalDebt"] == 0
+    assert vaultB.strategies(providerB).dict()["totalDebt"] == 0
