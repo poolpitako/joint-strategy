@@ -55,7 +55,7 @@ abstract contract HegicJoint is Joint {
         hegicCallOptionsPool = _hegicCallOptionsPool;
         hegicPutOptionsPool = _hegicPutOptionsPool;
 
-        hedgeBudget = 50; // 0.5% per hedging period
+        hedgeBudget = 100; // 0.5% per hedging period
         protectionRange = 1000; // 10%
         period = 7 days;
         minTimeToMaturity = 3600; // 1 hour

@@ -98,7 +98,7 @@ def tokenA(request):
         # "WETH",  # WETH
         # 'LINK', # LINK
         # 'USDT', # USDT
-        # 'DAI', # DAI
+        'DAI', # DAI
         "USDC",  # USDC
     ],
     scope="session",
@@ -131,8 +131,8 @@ def tokenB_whale(tokenB):
 
 
 token_prices = {
-    "WBTC": 60_000,
-    "WETH": 4_500,
+    "WBTC": 45_000,
+    "WETH": 4_000,
     "LINK": 20,
     "YFI": 30_000,
     "USDT": 1,
@@ -280,8 +280,8 @@ def joint(
         router,
         weth,
         rewards,
-        callPool_addresses[tokenA.symbol()],
-        putPool_addresses[tokenA.symbol()],
+        callPool_addresses[tokenA.symbol()][tokenB.symbol()],
+        putPool_addresses[tokenA.symbol()][tokenB.symbol()],
         masterchef,
         mc_pid,
     )
@@ -317,38 +317,76 @@ def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
 
 
 putPool_addresses = {
-    "WETH": "0x790e96E7452c3c2200bbCAA58a468256d482DD8b",
-    "WBTC": "0x7A42A60F8bA4843fEeA1bD4f08450D2053cC1ab6",
+    "WETH": {
+        "USDC": "0x790e96E7452c3c2200bbCAA58a468256d482DD8b",
+        "DAI": "0xA5b0c4145F8CE7ff3F1927862b65Aa4aad4415e7",
+        "WBTC": "0x99066C30c42D3Dad88e8AA00D10CA30e6D29cE16"
+        },
+    "WBTC": {
+        "USDC": "0x7A42A60F8bA4843fEeA1bD4f08450D2053cC1ab6",
+        "WETH": "",
+        }
 }
+
 callPool_addresses = {
-    "WETH": "0xb9ed94c6d594b2517c4296e24A8c517FF133fb6d",
-    "WBTC": "0xfA77f713901a840B3DF8F2Eb093d95fAC61B215A",
+    "WETH": {
+        "USDC": "0xb9ed94c6d594b2517c4296e24A8c517FF133fb6d",
+        "DAI": "0x16171a60B6A523b8fc2250b222862De93fc90eEa",
+        "WBTC": "0xA8C8462301815300C7382c7d2f449D1720B556D9",
+        },
+    "WBTC": {
+        "USDC": "0xfA77f713901a840B3DF8F2Eb093d95fAC61B215A",
+        "WETH": "",
+        }
 }
+@pytest.fixture(autouse=True)
+def whitelist_option_buyer(tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB, joint):
+    hegic_gov = "0xf15968a096fc8f47650001585d23bee819b5affb"
+    putPool = Contract(putPool_addresses[tokenA.symbol()][tokenB.symbol()])
+    callPool = Contract(callPool_addresses[tokenA.symbol()][tokenB.symbol()])
+    
+    try: 
+        putPool.grantRole("0x43f25613eb2f15fb17222a5d424ca2655743e71265d98e4b93c05e5fb589ecde", joint, {'from': hegic_gov})
+        callPool.grantRole("0x43f25613eb2f15fb17222a5d424ca2655743e71265d98e4b93c05e5fb589ecde", joint, {'from': hegic_gov})
+    except:
+        print("no need to whitelist")
 
 
 @pytest.fixture(autouse=True)
 def provideLiquidity(tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB):
     hegic_gov = "0xf15968a096fc8f47650001585d23bee819b5affb"
-    putPool = Contract(putPool_addresses[tokenA.symbol()])
-    callPool = Contract(callPool_addresses[tokenA.symbol()])
+    putPool = Contract(putPool_addresses[tokenA.symbol()][tokenB.symbol()])
+    callPool = Contract(callPool_addresses[tokenA.symbol()][tokenB.symbol()])
 
-    callPool.setMaxDepositAmount(
-        2 ** 256 - 1,
-        2 ** 256 - 1,
-        {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
-    )
-    putPool.setMaxDepositAmount(
-        2 ** 256 - 1,
-        2 ** 256 - 1,
-        {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
-    )
+    # depending on pool type (yearn vs regular hegic) we will have this differently
+    try:
+        callPool.setMaxDepositAmount(
+            2 ** 256 - 1,
+            2 ** 256 - 1,
+            {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
+        )
+        putPool.setMaxDepositAmount(
+            2 ** 256 - 1,
+            2 ** 256 - 1,
+            {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
+        )
+    except:
+        callPool.setMaxDepositAmount(
+            2 ** 256 - 1,
+            {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
+        )
+        putPool.setMaxDepositAmount(
+            2 ** 256 - 1,
+            {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
+        )
+    
 
     tokenA.approve(
         callPool, 2 ** 256 - 1, {"from": tokenA_whale, "gas": 6_000_000, "gas_price": 0}
     )
     callPool.provideFrom(
         tokenA_whale,
-        amountA,
+        amountA*2,
         False,
         0,
         {"from": tokenA_whale, "gas": 6_000_000, "gas_price": 0},
@@ -358,7 +396,7 @@ def provideLiquidity(tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amount
     )
     putPool.provideFrom(
         tokenB_whale,
-        amountB,
+        amountB*2,
         False,
         0,
         {"from": tokenB_whale, "gas": 6_000_000, "gas_price": 0},
