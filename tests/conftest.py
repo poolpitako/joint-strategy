@@ -3,6 +3,7 @@ from brownie import config, web3
 from brownie import Contract, accounts
 from brownie.network import gas_price
 from brownie.network.gas.strategies import LinearScalingStrategy
+from brownie import chain 
 
 # Function scoped isolation fixture to enable xdist.
 # Snapshots the chain before each test and reverts after test completion.
@@ -23,6 +24,8 @@ def reset_chain(chain):
 
 @pytest.fixture
 def gov(accounts):
+    accounts[0].transfer("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", 10e18)
+    accounts[0].transfer(accounts[0], 10e18)
     yield accounts.at("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", force=True)
 
 
@@ -70,6 +73,9 @@ token_addresses = {
     "DAI": "0x6B175474E89094C44Da98b954EedeAC495271d0F",  # DAI
     "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",  # USDC
     "SUSHI": "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2",  # SUSHI
+    "MIM": "0x82f0b8b456c1a451378467398982d4834b6829c1", # MIM
+    "WFTM": "0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83", # WFTM
+    "SPIRIT": "0x5Cc61A78F164885776AA610fb0FE1257df78E59B", # SPIRIT
 }
 
 # TODO: uncomment those tokens you want to test as want
@@ -77,11 +83,12 @@ token_addresses = {
     params=[
         # 'WBTC', # WBTC
         # "YFI",  # YFI
-        "WETH",  # WETH
+        # "WETH",  # WETH
         # 'LINK', # LINK
         # 'USDT', # USDT
         # 'DAI', # DAI
         # 'USDC', # USDC
+        "WFTM", 
     ],
     scope="session",
     autouse=True,
@@ -99,7 +106,8 @@ def tokenA(request):
         # 'LINK', # LINK
         # 'USDT', # USDT
         # 'DAI', # DAI
-        "USDC",  # USDC
+        # "USDC",  # USDC
+        "MIM",
     ],
     scope="session",
     autouse=True,
@@ -117,6 +125,8 @@ whale_addresses = {
     "USDC": "0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503",
     "DAI": "0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503",
     "SUSHI": "0xf977814e90da44bfa03b6295a0616a897441acec",
+    "WFTM": "0x5AA53f03197E08C4851CAD8C92c7922DA5857E5d",
+    "MIM": "0x2dd7C9371965472E5A5fD28fbE165007c61439E1",
 }
 
 
@@ -138,6 +148,8 @@ token_prices = {
     "USDT": 1,
     "USDC": 1,
     "DAI": 1,
+    "WFTM": 3,
+    "MIM": 1,
 }
 
 
@@ -170,14 +182,21 @@ def amountB(tokenB, tokenB_whale, user):
     )
     yield amount
 
+mc_pids = {
+        "WFTM": {
+            "MIM": 30
+            }
+        }
 
 @pytest.fixture
-def mc_pid():
-    yield 1
+def mc_pid(tokenA, tokenB):
+    yield mc_pids[tokenA.symbol()][tokenB.symbol()]
 
 
 router_addresses = {
-    "SUSHI": "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F",
+    "SUSHI": "",
+    "SPIRIT": "0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52",
+    "SPOOKY": "0xF491e7B69E4244ad4002BC14e878a34207E38c29",
 }
 
 
@@ -191,8 +210,12 @@ def weth():
     token_address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
     yield Contract(token_address)
 
+@pytest.fixture
+def wftm():
+    token_address = token_addresses['WFTM']
+    yield Contract(token_address)
 
-@pytest.fixture(params=["SUSHI"], scope="session", autouse=True)
+@pytest.fixture(params=["SPIRIT"], scope="session", autouse=True)
 def rewards(request):
     rewards_address = token_addresses[request.param]  # sushi
     yield Contract(rewards_address)
@@ -205,6 +228,7 @@ def rewards_whale(rewards):
 
 masterchef_addresses = {
     "SUSHI": "0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd",
+    "SPIRIT": "0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093",
 }
 
 
@@ -242,7 +266,7 @@ def vaultB(pm, gov, rewards, guardian, management, tokenB):
 
 @pytest.fixture(scope="session")
 def registry():
-    yield Contract("0x50c1a2eA0a861A967D9d0FFE2AE4012c2E053804")
+    yield Contract("")
 
 
 @pytest.fixture(scope="session")
@@ -261,11 +285,11 @@ def joint(
     keeper,
     providerA,
     providerB,
-    SushiJoint,
+    SpiritJoint,
     router,
     masterchef,
     rewards,
-    weth,
+    wftm,
     mc_pid,
     LPHedgingLibrary,
     gov,
@@ -273,15 +297,15 @@ def joint(
     tokenB,
 ):
     gas_price(0)
+
     joint = gov.deploy(
-        SushiJoint,
+        SpiritJoint,
         providerA,
         providerB,
         router,
-        weth,
+        wftm,
         rewards,
-        callPool_addresses[tokenA.symbol()],
-        putPool_addresses[tokenA.symbol()],
+        hedgil_pools[tokenA.symbol()][tokenB.symbol()],
         masterchef,
         mc_pid,
     )
@@ -297,10 +321,10 @@ def providerA(strategist, keeper, vaultA, ProviderStrategy, gov):
     strategy = strategist.deploy(ProviderStrategy, vaultA)
     strategy.setKeeper(keeper, {"from": gov})
     vaultA.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
-    strategy.setHealthCheck("0xDDCea799fF1699e98EDF118e0629A974Df7DF012", {"from": gov})
+    strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov})
     strategy.setDoHealthCheck(False, {"from": gov})
-    Contract(strategy.healthCheck()).setlossLimitRatio(1000, {"from": gov})
-    Contract(strategy.healthCheck()).setProfitLimitRatio(2000, {"from": gov})
+    Contract(strategy.healthCheck()).setlossLimitRatio(1000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"})
+    Contract(strategy.healthCheck()).setProfitLimitRatio(2000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"})
     yield strategy
 
 
@@ -309,61 +333,25 @@ def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
     strategy = strategist.deploy(ProviderStrategy, vaultB)
     strategy.setKeeper(keeper, {"from": gov})
     vaultB.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
-    strategy.setHealthCheck("0xDDCea799fF1699e98EDF118e0629A974Df7DF012", {"from": gov})
+    strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov})
     strategy.setDoHealthCheck(False, {"from": gov})
-    Contract(strategy.healthCheck()).setlossLimitRatio(1000, {"from": gov})
-    Contract(strategy.healthCheck()).setProfitLimitRatio(2000, {"from": gov})
+    Contract(strategy.healthCheck()).setlossLimitRatio(1000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"})
+    Contract(strategy.healthCheck()).setProfitLimitRatio(2000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"})
     yield strategy
 
 
-putPool_addresses = {
-    "WETH": "0x790e96E7452c3c2200bbCAA58a468256d482DD8b",
-    "WBTC": "0x7A42A60F8bA4843fEeA1bD4f08450D2053cC1ab6",
-}
-callPool_addresses = {
-    "WETH": "0xb9ed94c6d594b2517c4296e24A8c517FF133fb6d",
-    "WBTC": "0xfA77f713901a840B3DF8F2Eb093d95fAC61B215A",
-}
-
+hedgil_pools = {
+        "WFTM" :
+            {
+                "MIM": "0x150C42e9CB21354030967579702e0f010e208E86"
+            }
+    }
 
 @pytest.fixture(autouse=True)
 def provideLiquidity(tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB):
-    hegic_gov = "0xf15968a096fc8f47650001585d23bee819b5affb"
-    putPool = Contract(putPool_addresses[tokenA.symbol()])
-    callPool = Contract(callPool_addresses[tokenA.symbol()])
-
-    callPool.setMaxDepositAmount(
-        2 ** 256 - 1,
-        2 ** 256 - 1,
-        {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
-    )
-    putPool.setMaxDepositAmount(
-        2 ** 256 - 1,
-        2 ** 256 - 1,
-        {"from": hegic_gov, "gas": 6_000_000, "gas_price": 0},
-    )
-
-    tokenA.approve(
-        callPool, 2 ** 256 - 1, {"from": tokenA_whale, "gas": 6_000_000, "gas_price": 0}
-    )
-    callPool.provideFrom(
-        tokenA_whale,
-        amountA,
-        False,
-        0,
-        {"from": tokenA_whale, "gas": 6_000_000, "gas_price": 0},
-    )
-    tokenB.approve(
-        putPool, 2 ** 256 - 1, {"from": tokenB_whale, "gas": 6_000_000, "gas_price": 0}
-    )
-    putPool.provideFrom(
-        tokenB_whale,
-        amountB,
-        False,
-        0,
-        {"from": tokenB_whale, "gas": 6_000_000, "gas_price": 0},
-    )
-
+    hedgil = Contract(hedgil_pools[tokenA.symbol()][tokenB.symbol()])
+    tokenB.approve(hedgil, 2 ** 256 - 1, {'from': tokenB_whale, 'gas_price': '0'})
+    hedgil.provideLiquidity(100000 * 1e18, 0, tokenB_whale, {'from': tokenB_whale, 'gas_price': '0'})
 
 # @pytest.fixture
 # def cloned_strategy(Strategy, vault, strategy, strategist, gov):
@@ -401,35 +389,32 @@ def RELATIVE_APPROX():
     yield 1e-5
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=False)
 def mock_chainlink(AggregatorMock, gov):
-    owner = "0x21f73d42eb58ba49ddb685dc29d3bf5c0f0373ca"
+    # owner = "0x21f73d42eb58ba49ddb685dc29d3bf5c0f0373ca"
 
-    priceProvider = Contract("0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419")
-    aggregator = gov.deploy(AggregatorMock, 0)
+    # priceProvider = Contract("0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419")
+    #aggregator = gov.deploy(AggregatorMock, 0)
 
-    priceProvider.proposeAggregator(
-        aggregator.address, {"from": owner, "gas": 6_000_000, "gas_price": 0}
-    )
-    priceProvider.confirmAggregator(
-        aggregator.address, {"from": owner, "gas": 6_000_000, "gas_price": 0}
-    )
+    # priceProvider.proposeAggregator(
+    #    aggregator.address, {"from": owner, "gas": 6_000_000, "gas_price": 0}
+    #)
+    #priceProvider.confirmAggregator(
+    #    aggregator.address, {"from": owner, "gas": 6_000_000, "gas_price": 0}
+    #)
 
-    yield aggregator
-
+    #yield aggregator
+    return
 
 @pytest.fixture(autouse=True)
-def first_sync(mock_chainlink, joint):
-    reserveA, reserveB = joint.getReserves()
-    pairPrice = (
-        reserveB
-        / reserveA
-        * 10 ** Contract(joint.tokenA()).decimals()
-        / 10 ** Contract(joint.tokenB()).decimals()
-        * 1e8
-    )
-    mock_chainlink.setPrice(pairPrice, {"from": accounts[0]})
-
+def first_sync(joint):
+    relayer = "0x33E0E07cA86c869adE3fc9DE9126f6C73DAD105e"
+    imp = Contract("0x5bfab94edE2f4d911A6CC6d06fdF2d43aD3c7068")
+    lp_token = Contract(joint.pair())
+    (reserve0, reserve1, a) = lp_token.getReserves()
+    ftm_price = reserve1 / reserve0 *  10 ** 9
+    print(f"Current price is: {ftm_price/1e9}")
+    imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {'from': relayer})
 
 @pytest.fixture(autouse=True)
 def short_period(gov, joint):
