@@ -343,7 +343,7 @@ def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
 hedgil_pools = {
         "WFTM" :
             {
-                "MIM": "0x150C42e9CB21354030967579702e0f010e208E86"
+                "MIM": "0xC0176FAa0e20dFf3CB6B810aEaE64ef271B1b64b"
             }
     }
 

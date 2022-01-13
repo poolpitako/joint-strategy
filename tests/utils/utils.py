@@ -2,18 +2,18 @@ import brownie
 from brownie import interface, chain, accounts, web3, network, Contract
 
 
-def sync_price(joint, mock_chainlink):
+def sync_price(joint):
     # we update the price on the Oracle to simulate real market dynamics
     # otherwise, price of pair and price of oracle would be different and it would look manipulated
-    reserveA, reserveB = joint.getReserves()
-    pairPrice = (
-        reserveB
-        / reserveA
-        * 10 ** Contract(joint.tokenA()).decimals()
-        / 10 ** Contract(joint.tokenB()).decimals()
-        * 1e8
-    )
-    mock_chainlink.setPrice(pairPrice, {"from": accounts[0]})
+    relayer = "0x33E0E07cA86c869adE3fc9DE9126f6C73DAD105e"
+    imp = Contract("0x5bfab94edE2f4d911A6CC6d06fdF2d43aD3c7068")
+    lp_token = Contract(joint.pair())
+    (reserve0, reserve1, a) = lp_token.getReserves()
+    ftm_price = reserve1 / reserve0 *  10 ** 9
+    print(f"Current price is: {ftm_price/1e9}")
+    imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {'from': relayer})
+
+
 
 
 def print_hedge_status(joint, tokenA, tokenB):

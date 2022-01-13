@@ -173,8 +173,6 @@ abstract contract HedgilJoint is Joint {
         return IHedgilPool(hedgilPool).getHedgeStrike(activeHedgeID);
     }
 
-    event Numbers(string name, uint number);
-
     function hedgeLP()
         internal
         override
@@ -196,20 +194,7 @@ abstract contract HedgilJoint is Joint {
             protectionRange,
             period
         );
-        emit Numbers("activeHedgeID", activeHedgeID);
-        uint256 tokenADecimals =
-            uint256(10)**uint256(IERC20Extended(tokenA).decimals());
-        uint256 tokenBDecimals =
-            uint256(10)**uint256(IERC20Extended(tokenB).decimals());
 
-        (uint256 reserveA, uint256 reserveB) = getReserves();
-        uint256 currentPairPrice =
-            reserveB.mul(tokenADecimals).mul(PRICE_DECIMALS).div(reserveA).div(
-                tokenBDecimals
-            );
-
-        emit Numbers("strikePrice", strikePrice);
-        emit Numbers("currentPairPrice", currentPairPrice);
         require(
             _isWithinRange(strikePrice, maxSlippageOpen) ||
                 skipManipulatedCheck
@@ -233,6 +218,7 @@ abstract contract HedgilJoint is Joint {
         (, uint256 exercisePrice) = IHedgilPool(hedgilPool).closeHedge(
             activeHedgeID
         );
+
         require(
             _isWithinRange(exercisePrice, maxSlippageClose) ||
                 skipManipulatedCheck

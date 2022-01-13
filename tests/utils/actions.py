@@ -89,7 +89,7 @@ def generate_profit(
 
 
 def swap(tokenFrom, tokenTo, amountFrom, tokenFrom_whale, joint, mock_chainlink):
-    tokenFrom.approve(joint.router(), 2 ** 256 - 1, {"from": tokenFrom_whale})
+    tokenFrom.approve(joint.router(), 2 ** 256 - 1, {"from": tokenFrom_whale, "gas_price": 0})
     print(
         f"Dumping {amountFrom/10**tokenFrom.decimals()} {tokenFrom.symbol()} for {tokenTo.symbol()}"
     )
@@ -108,7 +108,7 @@ def swap(tokenFrom, tokenTo, amountFrom, tokenFrom_whale, joint, mock_chainlink)
         [tokenFrom, tokenTo],
         tokenFrom_whale,
         2 ** 256 - 1,
-        {"from": tokenFrom_whale},
+        {"from": tokenFrom_whale, "gas_price": 0},
     )
     reserveA, reserveB = joint.getReserves()
     pairPrice = (
@@ -118,7 +118,7 @@ def swap(tokenFrom, tokenTo, amountFrom, tokenFrom_whale, joint, mock_chainlink)
         / 10 ** Contract(joint.tokenB()).decimals()
     )
     print(f"NewPairPrice: {pairPrice}")
-    utils.sync_price(joint, mock_chainlink)
+    utils.sync_price(joint)
 
 
 # TODO: add args as required
