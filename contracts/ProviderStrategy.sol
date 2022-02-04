@@ -144,11 +144,6 @@ contract ProviderStrategy is BaseStrategyInitializable {
             return;
         }
 
-        // if there was an open position, we close it befoer opening a new one
-        if(JointAPI(joint).balanceOfStake() || JointAPI(joint).balanceOfPair()) {
-            JointAPI(joint).closePositionReturnFunds();
-        }
-
         // Using a push approach (instead of pull)
         uint256 wantBalance = balanceOfWant();
         if (wantBalance > 0) {
