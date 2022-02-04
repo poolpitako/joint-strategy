@@ -277,6 +277,20 @@ abstract contract Joint {
         }
     }
 
+    function harvest() external onlyKeepers {
+        getReward();
+        
+        // TODO: use ySwaps
+        (address rewardSwappedTo, uint256 rewardSwapOutAmount) =
+            swapReward(balanceOfReward());
+    }
+
+    function harvestTrigger() external view returns (bool) {
+        uint256 minAmountOfReward = 1e18;
+        // TODO: move this to storage
+        return balanceOfReward() > minAmountOfReward;
+    }
+
     function getHedgeProfit() public view virtual returns (uint256, uint256);
 
     function estimatedTotalAssetsAfterBalance()
