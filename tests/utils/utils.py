@@ -13,9 +13,6 @@ def sync_price(joint):
     print(f"Current price is: {ftm_price/1e9}")
     imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {'from': relayer})
 
-
-
-
 def print_hedge_status(joint, tokenA, tokenB):
     callID = joint.activeCallID()
     putID = joint.activePutID()
