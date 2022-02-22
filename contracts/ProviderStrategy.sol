@@ -36,6 +36,8 @@ interface JointAPI {
     function migrateProvider(address _newProvider) external view;
 
     function shouldEndEpoch() external view returns (bool);
+    
+    function shouldStartEpoch() external view returns (bool);
 
     function dontInvestWant() external view returns (bool);
 }
@@ -131,7 +133,7 @@ contract ProviderStrategy is BaseStrategyInitializable {
         returns (bool)
     {
         // Delegating decision to joint
-        return JointAPI(joint).shouldEndEpoch();
+        return JointAPI(joint).shouldStartEpoch() || JointAPI(joint).shouldEndEpoch();
     }
 
     function dontInvestWant() public view returns (bool) {

@@ -70,7 +70,7 @@ def from_units(token, amount):
 
 
 # default: 6 hours (sandwich protection)
-def sleep(seconds=6 * 60 * 60):
+def sleep(seconds = 6 * 60 * 60):
     chain.sleep(seconds)
     chain.mine(1)
 

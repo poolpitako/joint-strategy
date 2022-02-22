@@ -58,6 +58,7 @@ abstract contract Joint {
 
     uint256 public minAmountToSell;
     uint256 public maxPercentageLoss;
+    uint256 public minRewardToHarvest;
 
     modifier onlyGovernance {
         checkGovernance();
@@ -70,10 +71,17 @@ abstract contract Joint {
     }
 
     modifier onlyProviders {
-        require(
-            msg.sender == address(providerA) || msg.sender == address(providerB)
-        );
+        checkProvider();
         _;
+    }
+
+    modifier onlyKeepers {
+        checkKeepers();
+        _;
+    }
+            
+    function checkKeepers() internal {
+        require(isKeeper() || isGovernance() || isVaultManager());
     }
 
     function checkGovernance() internal {
@@ -98,6 +106,12 @@ abstract contract Joint {
         return
             msg.sender == providerA.vault().management() ||
             msg.sender == providerB.vault().management();
+    }
+
+    function isKeeper() internal returns (bool) {
+        return 
+            (msg.sender == providerA.keeper()) ||
+            (msg.sender == providerB.keeper());
     }
 
     function isProvider() internal returns (bool) {
@@ -150,12 +164,25 @@ abstract contract Joint {
 
     function _autoProtect() internal view virtual returns (bool);
 
+    function shouldStartEpoch() public view returns (bool) {
+        // return true if we have balance of A or balance of B while the position is closed
+        return (balanceOfA() > 0 || balanceOfB() > 0) && investedA == 0 && investedB == 0;
+    }
+
     function setDontInvestWant(bool _dontInvestWant)
         external
         onlyVaultManagers
     {
         dontInvestWant = _dontInvestWant;
     }
+
+    function setMinRewardToHarvest(uint256 _minRewardToHarvest)
+        external
+        onlyVaultManagers
+    {
+        minRewardToHarvest = _minRewardToHarvest;
+    }
+
 
     function setMinAmountToSell(uint256 _minAmountToSell)
         external
@@ -277,6 +304,7 @@ abstract contract Joint {
         }
     }
 
+    // Keepers will claim and sell rewards mid-epoch (otherwise we sell only in the end)
     function harvest() external onlyKeepers {
         getReward();
         
@@ -286,9 +314,7 @@ abstract contract Joint {
     }
 
     function harvestTrigger() external view returns (bool) {
-        uint256 minAmountOfReward = 1e18;
-        // TODO: move this to storage
-        return balanceOfReward() > minAmountOfReward;
+        return balanceOfReward() > minRewardToHarvest;
     }
 
     function getHedgeProfit() public view virtual returns (uint256, uint256);
