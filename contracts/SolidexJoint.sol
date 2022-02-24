@@ -355,14 +355,14 @@ contract SolidexJoint is NoHedgeJoint {
         (uint256 reserveA, uint256 reserveB) = getReserves();
 
         if (sellToken == tokenA) {
-            uint256 buyAmount = ISolidlyPair(pair).getAmountOut(
+            uint256 buyAmount = ISolidlyPair(address(pair)).getAmountOut(
                 sellAmount,
                 sellToken
             );
             _aBalance = _aBalance.sub(sellAmount);
             _bBalance = _bBalance.add(buyAmount);
         } else if (sellToken == tokenB) {
-            uint256 buyAmount = ISolidlyPair(pair).getAmountOut(
+            uint256 buyAmount = ISolidlyPair(address(pair)).getAmountOut(
                 sellAmount,
                 sellToken
             );
