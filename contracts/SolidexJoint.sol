@@ -50,6 +50,7 @@ contract SolidexJoint is NoHedgeJoint {
     function _initalizeSolidexJoint(address _solidex, bool _stable) internal {
         solidex = ISolidex(_solidex);
         stable = _stable;
+        pair = IUniswapV2Pair(getPair());
         IERC20(address(pair)).approve(_solidex, type(uint256).max);
     }
 
@@ -309,4 +310,61 @@ contract SolidexJoint is NoHedgeJoint {
         address factory = ISolidRouter(router).factory();
         return ISolidFactory(factory).getPair(tokenA, tokenB, stable);
     }
+
+    
+    function estimatedTotalAssetsAfterBalance()
+        public
+        view
+        override
+        returns (uint256 _aBalance, uint256 _bBalance)
+    {
+        uint256 rewardsPending = pendingReward().add(balanceOfReward());
+
+        (_aBalance, _bBalance) = balanceOfTokensInLP();
+
+        _aBalance = _aBalance.add(balanceOfA());
+        _bBalance = _bBalance.add(balanceOfB());
+
+        (uint256 callProfit, uint256 putProfit) = getHedgeProfit();
+        _aBalance = _aBalance.add(callProfit);
+        _bBalance = _bBalance.add(putProfit);
+
+        if (reward == tokenA) {
+            _aBalance = _aBalance.add(rewardsPending);
+        } else if (reward == tokenB) {
+            _bBalance = _bBalance.add(rewardsPending);
+        } else if (rewardsPending != 0) {
+            address swapTo = findSwapTo(reward);
+            uint256[] memory outAmounts =
+                ISolidRouter(router).getAmountsOut(
+                    rewardsPending,
+                    getTokenOutPathSolid(reward, swapTo)
+                );
+            if (swapTo == tokenA) {
+                _aBalance = _aBalance.add(outAmounts[outAmounts.length - 1]);
+            } else if (swapTo == tokenB) {
+                _bBalance = _bBalance.add(outAmounts[outAmounts.length - 1]);
+            }
+        }
+
+        (address sellToken, uint256 sellAmount) =
+            calculateSellToBalance(_aBalance, _bBalance, investedA, investedB);
+
+        (uint256 reserveA, uint256 reserveB) = getReserves();
+
+        if (sellToken == tokenA) {
+            uint256 buyAmount =
+                UniswapV2Library.getAmountOut(sellAmount, reserveA, reserveB);
+            _aBalance = _aBalance.sub(sellAmount);
+            _bBalance = _bBalance.add(buyAmount);
+        } else if (sellToken == tokenB) {
+            uint256 buyAmount =
+                UniswapV2Library.getAmountOut(sellAmount, reserveB, reserveA);
+            _bBalance = _bBalance.sub(sellAmount);
+            _aBalance = _aBalance.add(buyAmount);
+        }
+    }
+
+
+
 }

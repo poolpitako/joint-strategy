@@ -322,6 +322,7 @@ abstract contract Joint {
     function estimatedTotalAssetsAfterBalance()
         public
         view
+        virtual
         returns (uint256 _aBalance, uint256 _bBalance)
     {
         uint256 rewardsPending = pendingReward().add(balanceOfReward());
