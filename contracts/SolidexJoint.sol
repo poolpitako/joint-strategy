@@ -49,7 +49,7 @@ contract SolidexJoint is NoHedgeJoint {
 
     function _initalizeSolidexJoint(address _solidex, bool _stable) internal {
         solidex = ISolidex(_solidex);
-
+        stable = _stable;
         IERC20(address(pair)).approve(_solidex, type(uint256).max);
     }
 
