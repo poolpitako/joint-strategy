@@ -493,6 +493,7 @@ abstract contract Joint {
 
     function createLP()
         internal
+        virtual
         returns (
             uint256,
             uint256,
@@ -560,6 +561,7 @@ abstract contract Joint {
     function withdrawLP() internal virtual;
 
     function swapReward(uint256 _rewardBal)
+        virtual 
         internal
         returns (address, uint256)
     {
@@ -586,7 +588,7 @@ abstract contract Joint {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amountIn
-    ) internal returns (uint256 _amountOut) {
+    ) internal virtual returns (uint256 _amountOut) {
         uint256[] memory amounts =
             IUniswapV2Router02(router).swapExactTokensForTokens(
                 _amountIn,
@@ -598,7 +600,7 @@ abstract contract Joint {
         _amountOut = amounts[amounts.length - 1];
     }
 
-    function _closePosition() internal returns (uint256, uint256) {
+    function _closePosition() internal virtual returns (uint256, uint256) {
         // Unstake LP from staking contract
         withdrawLP();
 
@@ -695,7 +697,7 @@ abstract contract Joint {
         uint256 amount,
         uint256 expectedBalanceA,
         uint256 expectedBalanceB
-    ) external onlyVaultManagers {
+    ) external virtual onlyVaultManagers {
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
             tokenB,
