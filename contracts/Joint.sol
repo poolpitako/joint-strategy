@@ -641,7 +641,7 @@ abstract contract Joint {
         }
     }
 
-    function getPair() internal view returns (address) {
+    function getPair() internal view virtual returns (address) {
         address factory = IUniswapV2Router02(router).factory();
         return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
     }

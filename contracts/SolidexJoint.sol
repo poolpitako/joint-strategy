@@ -17,6 +17,10 @@ interface ISolidex {
     function userBalances(address _account, address _pair) external view returns (uint256);
 }
 
+interface ISolidFactory {
+    function getPair(address token0, address token1, bool stable) external view returns (address);
+}
+
 interface ISolidRouter {
     struct route {
         address from;
@@ -24,6 +28,7 @@ interface ISolidRouter {
         bool stable;
     }
 
+    function factory() external view returns (address);
     function addLiquidity(
         address tokenA,
         address tokenB,
@@ -215,7 +220,6 @@ contract SolidexJoint is NoHedgeJoint {
     }
 
 
-
     // OVERRIDE to incorporate stableswap or volatileswap
     function createLP()
         internal
@@ -367,6 +371,8 @@ contract SolidexJoint is NoHedgeJoint {
         return (tokenA, 0);
     }
 
-
-
+    function getPair() internal view override returns (address) {
+        address factory = ISolidRouter(router).factory();
+        return ISolidFactory(factory).getPair(tokenA, tokenB, stable);
+    }
 }
