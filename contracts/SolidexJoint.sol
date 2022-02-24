@@ -146,8 +146,13 @@ contract SolidexJoint is NoHedgeJoint {
     function withdrawLP() internal override {
         uint256 stakeBalance = balanceOfStake();
         if (stakeBalance > 0 && !dontWithdraw) {
+            getReward();
             solidex.withdraw(address(pair), stakeBalance);
         }
+    }
+
+    function claimRewardManually() external onlyVaultManagers {
+        getReward();
     }
 
     function withdrawLPManually(uint256 amount) external onlyVaultManagers {
@@ -285,10 +290,6 @@ contract SolidexJoint is NoHedgeJoint {
         returns (address, uint256)
     {
         // WARNING: NOT SELLING REWARDS! !!! 
-
-
-
-
         if (reward == tokenA || reward == tokenB || _rewardBal == 0) {
             return (reward, 0);
         }
