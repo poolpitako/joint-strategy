@@ -72,6 +72,9 @@ def test_profitable_harvest(
     print(f"Return A: {returnA:.4%}")
     print(f"Return B: {returnB:.4%}")
 
+    # Return approximately equal
+    assert pytest.approx(returnA, rel=RELATIVE_APPROX) == returnB
+
     solid_pre = solid_token.balanceOf(joint)
     sex_pre = sex_token.balanceOf(joint)
     assert sex_pre > 0
