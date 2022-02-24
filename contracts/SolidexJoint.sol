@@ -52,6 +52,7 @@ contract SolidexJoint is NoHedgeJoint {
         stable = _stable;
         pair = IUniswapV2Pair(getPair());
         IERC20(address(pair)).approve(_solidex, type(uint256).max);
+        IERC20(address(pair)).approve(address(router), type(uint256).max);
     }
 
     event Cloned(address indexed clone);
@@ -235,7 +236,7 @@ contract SolidexJoint is NoHedgeJoint {
             now
         );
         require(expectedBalanceA <= balanceOfA(), "!sandwidched");
-        require(expectedBalanceA <= balanceOfB(), "!sandwidched");
+        require(expectedBalanceB <= balanceOfB(), "!sandwidched");
     }
 
     function sellCapital(

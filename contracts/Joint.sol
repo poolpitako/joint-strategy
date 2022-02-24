@@ -709,7 +709,7 @@ abstract contract Joint {
             now
         );
         require(expectedBalanceA <= balanceOfA(), "!sandwidched");
-        require(expectedBalanceA <= balanceOfB(), "!sandwidched");
+        require(expectedBalanceB <= balanceOfB(), "!sandwidched");
     }
 
     function swapTokenForTokenManually(
