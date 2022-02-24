@@ -6,6 +6,13 @@ import "./NoHedgeJoint.sol";
 import "../interfaces/ISolidex.sol";
 import "../interfaces/ISolidRouter.sol";
 
+interface ISolidlyPair is IUniswapV2Pair {
+    function getAmountOut(uint256 amountIn, address tokenIn)
+        external
+        view
+        returns (uint256);
+}
+
 contract SolidexJoint is NoHedgeJoint {
     ISolidex public solidex;
     bool public stable;
@@ -21,16 +28,7 @@ contract SolidexJoint is NoHedgeJoint {
         address _reward,
         address _solidex,
         bool _stable
-    )
-        public
-        NoHedgeJoint(
-            _providerA,
-            _providerB,
-            _router,
-            _weth,
-            _reward
-        )
-    {
+    ) public NoHedgeJoint(_providerA, _providerB, _router, _weth, _reward) {
         _initalizeSolidexJoint(_solidex, _stable);
     }
 
@@ -98,14 +96,13 @@ contract SolidexJoint is NoHedgeJoint {
     }
 
     function name() external view override returns (string memory) {
-        string memory ab =
-            string(
-                abi.encodePacked(
-                    IERC20Extended(address(tokenA)).symbol(),
-                    "-",
-                    IERC20Extended(address(tokenB)).symbol()
-                )
-            );
+        string memory ab = string(
+            abi.encodePacked(
+                IERC20Extended(address(tokenA)).symbol(),
+                "-",
+                IERC20Extended(address(tokenB)).symbol()
+            )
+        );
 
         return string(abi.encodePacked("NoHedgeSolidexJoint(", ab, ")"));
     }
@@ -117,8 +114,11 @@ contract SolidexJoint is NoHedgeJoint {
     function pendingReward() public view override returns (uint256) {
         address[] memory pairs = new address[](1);
         pairs[0] = address(pair);
-        ISolidex.Amounts[] memory pendings = solidex.pendingRewards(address(this), pairs);
-        
+        ISolidex.Amounts[] memory pendings = solidex.pendingRewards(
+            address(this),
+            pairs
+        );
+
         uint256 pendingSEX = pendings[0].sex;
         uint256 pendingSOLID = pendings[0].solid;
 
@@ -160,7 +160,6 @@ contract SolidexJoint is NoHedgeJoint {
         solidex.withdraw(address(pair), amount);
     }
 
-
     // OVERRIDE to incorporate stableswap or volatileswap
     function createLP()
         internal
@@ -191,7 +190,6 @@ contract SolidexJoint is NoHedgeJoint {
             );
     }
 
-
     function _closePosition() internal override returns (uint256, uint256) {
         // Unstake LP from staking contract
         withdrawLP();
@@ -219,7 +217,6 @@ contract SolidexJoint is NoHedgeJoint {
         return (balanceOfA(), balanceOfB());
     }
 
-    
     function removeLiquidityManually(
         uint256 amount,
         uint256 expectedBalanceA,
@@ -244,8 +241,8 @@ contract SolidexJoint is NoHedgeJoint {
         address _tokenTo,
         uint256 _amountIn
     ) internal override returns (uint256 _amountOut) {
-        uint256[] memory amounts =
-            ISolidRouter(router).swapExactTokensForTokens(
+        uint256[] memory amounts = ISolidRouter(router)
+            .swapExactTokensForTokens(
                 _amountIn,
                 0,
                 getTokenOutPathSolid(_tokenFrom, _tokenTo),
@@ -255,19 +252,16 @@ contract SolidexJoint is NoHedgeJoint {
         _amountOut = amounts[amounts.length - 1];
     }
 
-
     function getTokenOutPathSolid(address _token_in, address _token_out)
         internal
         view
         returns (ISolidRouter.route[] memory _routes)
     {
-
         address[] memory _path;
-        bool is_weth =
-            _token_in == address(WETH) || _token_out == address(WETH);
-        bool is_internal =
-            (_token_in == tokenA && _token_out == tokenB) ||
-                (_token_in == tokenB && _token_out == tokenA);
+        bool is_weth = _token_in == address(WETH) ||
+            _token_out == address(WETH);
+        bool is_internal = (_token_in == tokenA && _token_out == tokenB) ||
+            (_token_in == tokenB && _token_out == tokenA);
         _path = new address[](is_weth || is_internal ? 2 : 3);
         _path[0] = _token_in;
         if (is_weth || is_internal) {
@@ -279,18 +273,18 @@ contract SolidexJoint is NoHedgeJoint {
 
         uint256 pathLength = _path.length > 1 ? _path.length - 1 : 1;
         _routes = new ISolidRouter.route[](pathLength);
-        for(uint i = 0; i < pathLength; i++) {
+        for (uint256 i = 0; i < pathLength; i++) {
             bool isStable = is_internal ? stable : false;
-            _routes[i] = ISolidRouter.route(_path[i], _path[i+1], isStable);
+            _routes[i] = ISolidRouter.route(_path[i], _path[i + 1], isStable);
         }
     }
 
     function swapReward(uint256 _rewardBal)
-        override
         internal
+        override
         returns (address, uint256)
     {
-        // WARNING: NOT SELLING REWARDS! !!! 
+        // WARNING: NOT SELLING REWARDS! !!!
         if (reward == tokenA || reward == tokenB || _rewardBal == 0) {
             return (reward, 0);
         }
@@ -300,8 +294,12 @@ contract SolidexJoint is NoHedgeJoint {
         }
 
         // Assume that position has already been liquidated
-        (uint256 ratioA, uint256 ratioB) =
-            getRatios(balanceOfA(), balanceOfB(), investedA, investedB);
+        (uint256 ratioA, uint256 ratioB) = getRatios(
+            balanceOfA(),
+            balanceOfB(),
+            investedA,
+            investedB
+        );
         if (ratioA >= ratioB) {
             return (tokenB, 0);
         }
@@ -313,7 +311,6 @@ contract SolidexJoint is NoHedgeJoint {
         return ISolidFactory(factory).getPair(tokenA, tokenB, stable);
     }
 
-    
     function estimatedTotalAssetsAfterBalance()
         public
         view
@@ -337,11 +334,10 @@ contract SolidexJoint is NoHedgeJoint {
             _bBalance = _bBalance.add(rewardsPending);
         } else if (rewardsPending != 0) {
             address swapTo = findSwapTo(reward);
-            uint256[] memory outAmounts =
-                ISolidRouter(router).getAmountsOut(
-                    rewardsPending,
-                    getTokenOutPathSolid(reward, swapTo)
-                );
+            uint256[] memory outAmounts = ISolidRouter(router).getAmountsOut(
+                rewardsPending,
+                getTokenOutPathSolid(reward, swapTo)
+            );
             if (swapTo == tokenA) {
                 _aBalance = _aBalance.add(outAmounts[outAmounts.length - 1]);
             } else if (swapTo == tokenB) {
@@ -349,24 +345,106 @@ contract SolidexJoint is NoHedgeJoint {
             }
         }
 
-        (address sellToken, uint256 sellAmount) =
-            calculateSellToBalance(_aBalance, _bBalance, investedA, investedB);
+        (address sellToken, uint256 sellAmount) = calculateSellToBalance(
+            _aBalance,
+            _bBalance,
+            investedA,
+            investedB
+        );
 
         (uint256 reserveA, uint256 reserveB) = getReserves();
 
         if (sellToken == tokenA) {
-            uint256 buyAmount =
-                UniswapV2Library.getAmountOut(sellAmount, reserveA, reserveB);
+            uint256 buyAmount = ISolidlyPair(pair).getAmountOut(
+                sellAmount,
+                sellToken
+            );
             _aBalance = _aBalance.sub(sellAmount);
             _bBalance = _bBalance.add(buyAmount);
         } else if (sellToken == tokenB) {
-            uint256 buyAmount =
-                UniswapV2Library.getAmountOut(sellAmount, reserveB, reserveA);
+            uint256 buyAmount = ISolidlyPair(pair).getAmountOut(
+                sellAmount,
+                sellToken
+            );
             _bBalance = _bBalance.sub(sellAmount);
             _aBalance = _aBalance.add(buyAmount);
         }
     }
 
+    function calculateSellToBalance(
+        uint256 currentA,
+        uint256 currentB,
+        uint256 startingA,
+        uint256 startingB
+    ) internal view override returns (address _sellToken, uint256 _sellAmount) {
+        if (startingA == 0 || startingB == 0) return (address(0), 0);
 
+        (uint256 ratioA, uint256 ratioB) = getRatios(
+            currentA,
+            currentB,
+            startingA,
+            startingB
+        );
 
+        if (ratioA == ratioB) return (address(0), 0);
+
+        (uint256 reserveA, uint256 reserveB) = getReserves();
+
+        if (ratioA > ratioB) {
+            _sellToken = tokenA;
+            _sellAmount = _calculateSellToBalance(
+                _sellToken,
+                currentA,
+                currentB,
+                startingA,
+                startingB,
+                10**uint256(IERC20Extended(tokenA).decimals())
+            );
+        } else {
+            _sellToken = tokenB;
+            _sellAmount = _calculateSellToBalance(
+                _sellToken,
+                currentB,
+                currentA,
+                startingB,
+                startingA,
+                10**uint256(IERC20Extended(tokenB).decimals())
+            );
+        }
+    }
+
+    function _calculateSellToBalance(
+        address sellToken,
+        uint256 current0,
+        uint256 current1,
+        uint256 starting0,
+        uint256 starting1,
+        uint256 precision
+    ) internal view returns (uint256 _sellAmount) {
+        uint256 numerator = current0
+            .sub(starting0.mul(current1).div(starting1))
+            .mul(precision);
+        uint256 exchangeRate = ISolidlyPair(address(pair)).getAmountOut(
+            precision,
+            sellToken
+        );
+
+        // First time to approximate
+        _sellAmount = numerator.div(
+            precision + starting0.mul(exchangeRate).div(starting1)
+        );
+        // Shortcut to avoid Uniswap amountIn == 0 revert
+        if (_sellAmount == 0) {
+            return 0;
+        }
+
+        // Second time to account for price impact
+        exchangeRate = ISolidlyPair(address(pair))
+            .getAmountOut(_sellAmount, sellToken)
+            .mul(precision)
+            .div(_sellAmount);
+        _sellAmount = numerator.div(
+            precision + starting0.mul(exchangeRate).div(starting1)
+        );
+    }
 }

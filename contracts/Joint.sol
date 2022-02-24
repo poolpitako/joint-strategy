@@ -399,7 +399,7 @@ abstract contract Joint {
         uint256 currentB,
         uint256 startingA,
         uint256 startingB
-    ) internal view returns (address _sellToken, uint256 _sellAmount) {
+    ) internal virtual view returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
         (uint256 ratioA, uint256 ratioB) =
