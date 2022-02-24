@@ -26,9 +26,9 @@ def test_profitable_harvest(
     sex_token,
     solid_router,
     lp_token,
-    lp_depositor_solidex
+    lp_depositor_solidex,
 ):
-    
+
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -55,13 +55,22 @@ def test_profitable_harvest(
         tokenA_whale,
         tokenB_whale,
     )
-    
+
     before_pps_tokenA = vaultA.pricePerShare()
     before_pps_tokenB = vaultB.pricePerShare()
     # Harvest 2: Realize profit
     chain.sleep(1)
 
-    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+    investedA, investedB = joint.investedA(), joint.investedB()
+
+    txA, txB = actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+    profitA = txA.events["Harvested"]["profit"]
+    profitB = txB.events["Harvested"]["profit"]
+    returnA = profitA / investedA
+    returnB = profitB / investedB
+
+    print(f"Return A: {returnA:.4%}")
+    print(f"Return B: {returnB:.4%}")
 
     solid_pre = solid_token.balanceOf(joint)
     sex_pre = sex_token.balanceOf(joint)
@@ -70,10 +79,10 @@ def test_profitable_harvest(
 
     gov_solid_pre = solid_token.balanceOf(gov)
     gov_sex_pre = sex_token.balanceOf(gov)
-    joint.sweep(solid_token,{"from":gov})
+    joint.sweep(solid_token, {"from": gov})
 
-    joint.sweep(sex_token,{"from":gov})
-    
+    joint.sweep(sex_token, {"from": gov})
+
     assert (solid_token.balanceOf(gov) - gov_solid_pre) == solid_pre
     assert (sex_token.balanceOf(gov) - gov_sex_pre) == sex_pre
 
@@ -92,6 +101,7 @@ def test_profitable_harvest(
     )
     assert vaultA.pricePerShare() > before_pps_tokenA
     assert vaultB.pricePerShare() > before_pps_tokenB
+
 
 # tests harvesting manually
 def test_manual_exit(
@@ -117,7 +127,7 @@ def test_manual_exit(
     sex_token,
     solid_router,
     lp_token,
-    lp_depositor_solidex
+    lp_depositor_solidex,
 ):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
@@ -145,7 +155,7 @@ def test_manual_exit(
         tokenA_whale,
         tokenB_whale,
     )
-    
+
     before_pps_tokenA = vaultA.pricePerShare()
     before_pps_tokenB = vaultB.pricePerShare()
     # Harvest 2: Realize profit
@@ -154,8 +164,8 @@ def test_manual_exit(
     joint.claimRewardManually()
     joint.withdrawLPManually(joint.balanceOfStake())
 
-    joint.removeLiquidityManually(joint.balanceOfPair(), 0, 0, {"from":gov})
-    joint.returnLooseToProvidersManually({"from":gov})
+    joint.removeLiquidityManually(joint.balanceOfPair(), 0, 0, {"from": gov})
+    joint.returnLooseToProvidersManually({"from": gov})
 
     solid_pre = solid_token.balanceOf(joint)
     sex_pre = sex_token.balanceOf(joint)
@@ -164,10 +174,10 @@ def test_manual_exit(
 
     gov_solid_pre = solid_token.balanceOf(gov)
     gov_sex_pre = sex_token.balanceOf(gov)
-    joint.sweep(solid_token,{"from":gov})
+    joint.sweep(solid_token, {"from": gov})
 
-    joint.sweep(sex_token,{"from":gov})
-    
+    joint.sweep(sex_token, {"from": gov})
+
     assert (solid_token.balanceOf(gov) - gov_solid_pre) == solid_pre
     assert (sex_token.balanceOf(gov) - gov_sex_pre) == sex_pre
 
@@ -189,8 +199,8 @@ def test_manual_exit(
     assert vaultB.strategies(providerB).dict()["totalDebt"] == 0
 
 
-
-# tests harvesting a strategy that returns profits correctly
+# tests harvesting a strategy that returns profits correctly with a big swap imbalancing
+@pytest.mark.parametrize("swap_from", ["a", "b"])
 def test_profitable_with_big_imbalance_harvest(
     chain,
     accounts,
@@ -214,9 +224,10 @@ def test_profitable_with_big_imbalance_harvest(
     sex_token,
     solid_router,
     lp_token,
-    lp_depositor_solidex
+    lp_depositor_solidex,
+    swap_from,
 ):
-    
+
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -243,25 +254,39 @@ def test_profitable_with_big_imbalance_harvest(
         tokenA_whale,
         tokenB_whale,
     )
-    
+
     before_pps_tokenA = vaultA.pricePerShare()
     before_pps_tokenB = vaultB.pricePerShare()
     # Harvest 2: Realize profit
     chain.sleep(1)
 
-    tokenA.approve(solid_router, 2**256-1, {'from': tokenA_whale})
+    token_in = tokenA if swap_from == "a" else tokenB
+    token_in_whale = tokenA_whale if swap_from == "a" else tokenB_whale
+    token_in.approve(solid_router, 2**256 - 1, {"from": token_in_whale})
     solid_router.swapExactTokensForTokensSimple(
-        10_000_000e6,
+        10_000_000 * 10 ** token_in.decimals(),
         0,
-        tokenA,
-        tokenB,
+        token_in,
+        tokenB if swap_from == "a" else tokenA,
         True,
-        tokenA_whale,
-        2**256-1,
-        {'from': tokenA_whale},
+        token_in_whale,
+        2**256 - 1,
+        {"from": token_in_whale},
     )
 
-    actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+    investedA, investedB = joint.investedA(), joint.investedB()
+
+    txA, txB = actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+    profitA = txA.events["Harvested"]["profit"]
+    profitB = txB.events["Harvested"]["profit"]
+    returnA = profitA / investedA
+    returnB = profitB / investedB
+
+    print(f"Return A: {returnA:.4%}")
+    print(f"Return B: {returnB:.4%}")
+
+    # Return approximately equal
+    assert pytest.approx(returnA, rel=RELATIVE_APPROX) == returnB
 
     solid_pre = solid_token.balanceOf(joint)
     sex_pre = sex_token.balanceOf(joint)
@@ -270,10 +295,10 @@ def test_profitable_with_big_imbalance_harvest(
 
     gov_solid_pre = solid_token.balanceOf(gov)
     gov_sex_pre = sex_token.balanceOf(gov)
-    joint.sweep(solid_token,{"from":gov})
+    joint.sweep(solid_token, {"from": gov})
 
-    joint.sweep(sex_token,{"from":gov})
-    
+    joint.sweep(sex_token, {"from": gov})
+
     assert (solid_token.balanceOf(gov) - gov_solid_pre) == solid_pre
     assert (sex_token.balanceOf(gov) - gov_sex_pre) == sex_pre
 

@@ -46,14 +46,14 @@ def wait_period_fraction(joint, percentage_of_period):
 def gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB):
     # first harvest uninvests (withdraws, closes hedge and removes liquidity) and takes funds (tokenA)
     # second harvest takes funds (tokenB) from joint
-    providerA.harvest({"from": gov})
-    providerB.harvest({"from": gov})
+    txA = providerA.harvest({"from": gov})
+    txB = providerB.harvest({"from": gov})
     # we set debtRatio to 10_000 in tests because the two vaults have the same amount.
     # in prod we need to set these manually to represent the same value
     vaultA.updateStrategyDebtRatio(providerA, 10_000, {"from": gov})
     vaultB.updateStrategyDebtRatio(providerB, 10_000, {"from": gov})
 
-    checks.epoch_ended(providerA, providerB, joint)
+    return txA, txB
 
 
 def gov_end_non_hedged_epoch(gov, providerA, providerB, joint, vaultA, vaultB):
