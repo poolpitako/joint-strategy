@@ -1,6 +1,8 @@
 from utils import actions, checks, utils
 import pytest
 from brownie import Contract, chain
+import eth_utils
+from eth_abi.packed import encode_abi_packed
 
 # tests harvesting a strategy that returns profits correctly
 def test_profitable_harvest(
@@ -320,3 +322,149 @@ def test_profitable_with_big_imbalance_harvest(
     )
     assert vaultA.pricePerShare() > before_pps_tokenA
     assert vaultB.pricePerShare() > before_pps_tokenB
+
+
+
+# tests harvesting a strategy that returns profits correctly
+def test_profitable_harvest_yswaps(
+    chain,
+    accounts,
+    tokenA,
+    tokenB,
+    vaultA,
+    vaultB,
+    providerA,
+    providerB,
+    joint,
+    user,
+    strategist,
+    amountA,
+    amountB,
+    RELATIVE_APPROX,
+    gov,
+    tokenA_whale,
+    tokenB_whale,
+    mock_chainlink,
+    solid_token,
+    sex_token,
+    solid_router,
+    lp_token,
+    lp_depositor_solidex,wftm
+):
+
+    # Deposit to the vault
+    actions.user_deposit(user, vaultA, tokenA, amountA)
+    actions.user_deposit(user, vaultB, tokenB, amountB)
+
+    # Harvest 1: Send funds through the strategy
+    chain.sleep(1)
+
+    actions.gov_start_epoch(
+        gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
+    )
+
+    total_assets_tokenA = providerA.estimatedTotalAssets()
+    total_assets_tokenB = providerB.estimatedTotalAssets()
+
+    assert pytest.approx(total_assets_tokenA, rel=1e-2) == amountA
+    assert pytest.approx(total_assets_tokenB, rel=1e-2) == amountB
+
+    profit_amount_percentage = 0.0
+    profit_amount_tokenA, profit_amount_tokenB = actions.generate_profit(
+        profit_amount_percentage,
+        joint,
+        providerA,
+        providerB,
+        tokenA_whale,
+        tokenB_whale,
+    )
+
+    before_pps_tokenA = vaultA.pricePerShare()
+    before_pps_tokenB = vaultB.pricePerShare()
+    # Harvest 2: Realize profit
+    chain.sleep(1)
+
+    investedA, investedB = joint.investedA(), joint.investedB()
+
+    txA, txB = actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+    profitA = txA.events["Harvested"]["profit"]
+    profitB = txB.events["Harvested"]["profit"]
+    returnA = profitA / investedA
+    returnB = profitB / investedB
+
+    print(f"Return A: {returnA:.4%}")
+    print(f"Return B: {returnB:.4%}")
+    assert profitA == 0
+    assert profitB == 0
+
+    # Return approximately equal
+    assert pytest.approx(returnA, rel=RELATIVE_APPROX) == returnB
+
+    solid_pre = solid_token.balanceOf(joint)
+    sex_pre = sex_token.balanceOf(joint)
+    assert sex_pre > 0
+    assert solid_pre > 0
+    token_out = joint.tokenA()
+
+    ins = [solid_token, sex_token]
+
+    ymechs_safe = "0x0000000031669Ab4083265E0850030fa8dEc8daf"
+    trade_factory = Contract("0xD3f89C21719Ec5961a3E6B0f9bBf9F9b4180E9e9")
+    print(f"Executing trades...")
+    for id in ins:
+        print(id.address)
+        receiver = joint.address
+        token_in = id
+        
+        amount_in = id.balanceOf(joint)
+        print(f"Executing trade {id}, tokenIn: {token_in} -> tokenOut {token_out} amount {amount_in/1e18}")
+
+        asyncTradeExecutionDetails = [joint, token_in, token_out, amount_in, 1]
+
+        # always start with optimisations. 5 is CallOnlyNoValue
+        optimsations = [["uint8"], [5]]
+        a = optimsations[0]
+        b = optimsations[1]
+
+        calldata = token_in.approve.encode_input(solid_router, amount_in)
+        t = createTx(token_in, calldata)
+        a = a + t[0]
+        b = b + t[1]
+
+        calldata = solid_router.swapExactTokensForTokens.encode_input(
+            amount_in, 0, [(token_in.address, wftm, False), (wftm, joint.tokenA(), False)], "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA", 2 ** 256 - 1
+        )
+        t = createTx(solid_router, calldata)
+        a = a + t[0]
+        b = b + t[1]
+
+        transaction = encode_abi_packed(a, b)
+
+        # min out must be at least 1 to ensure that the tx works correctly
+        #trade_factory.execute["uint256, address, uint, bytes"](
+        #    multicall_swapper.address, 1, transaction, {"from": ymechs_safe}
+        #)
+        trade_factory.execute['tuple,address,bytes'](asyncTradeExecutionDetails, 
+                "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA", transaction, {"from": ymechs_safe, "gas_price": 0}
+        )
+        print(token_out.balanceOf(joint)/1e18) 
+
+    utils.sleep()  # sleep for 6 hours
+
+    # all the balance (principal + profit) is in vault
+    total_balance_tokenA = vaultA.totalAssets()
+    total_balance_tokenB = vaultB.totalAssets()
+    assert (
+        pytest.approx(total_balance_tokenA, rel=5 * 1e-3)
+        == amountA + profit_amount_tokenA
+    )
+    assert (
+        pytest.approx(total_balance_tokenB, rel=5 * 1e-3)
+        == amountB + profit_amount_tokenB
+    )
+    assert vaultA.pricePerShare() > before_pps_tokenA
+    assert vaultB.pricePerShare() > before_pps_tokenB
+
+def createTx(to, data):
+    inBytes = eth_utils.to_bytes(hexstr=data)
+    return [["address", "uint256", "bytes"], [to.address, len(inBytes), inBytes]]

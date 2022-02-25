@@ -35,17 +35,16 @@ abstract contract ySwapper {
 
     function _setUpTradeFactory() internal {
         //approve and set up trade factory
-        address _tradeFactory = tradeFactory;
         tradesEnabled = true;
         (address[] memory tokensToEnable, address[] memory toTokens) = getYSwapTokens();
 
-        for(uint i = 0; i < tokensToEnable.length; i++) {
+        for(uint i; i < tokensToEnable.length; i++) {
             _enableTradeFactoryForToken(tokensToEnable[i], toTokens[i]);
         }
     }
  
     function _enableTradeFactoryForToken(address fromToken, address toToken) internal {
-         ITradeFactory tf = ITradeFactory(tradeFactory);
+        ITradeFactory tf = ITradeFactory(tradeFactory);
         IERC20(fromToken).safeApprove(address(tf), type(uint256).max);
         tf.enable(fromToken, toToken);
     }
