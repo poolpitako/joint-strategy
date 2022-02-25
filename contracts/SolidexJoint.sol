@@ -2,6 +2,7 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
+import "./ySwapper.sol";
 import "./NoHedgeJoint.sol";
 import "../interfaces/ISolidex.sol";
 import "../interfaces/ISolidRouter.sol";
@@ -13,7 +14,7 @@ interface ISolidlyPair is IUniswapV2Pair {
         returns (uint256);
 }
 
-contract SolidexJoint is NoHedgeJoint {
+contract SolidexJoint is NoHedgeJoint, ySwapper {
     ISolidex public solidex;
     bool public stable;
     bool public dontWithdraw;
@@ -446,5 +447,26 @@ contract SolidexJoint is NoHedgeJoint {
         _sellAmount = numerator.div(
             precision + starting0.mul(exchangeRate).div(starting1)
         );
+    }
+
+    function getYSwapTokens() internal view override returns (address[] memory, address[] memory) {
+        address[] memory tokens = new address[](2);
+        address[] memory toTokens = new address[](2);
+
+        tokens[0] = 0xD31Fcd1f7Ba190dBc75354046F6024A9b86014d7; // sex
+        toTokens[0] = address(tokenA); // swap to tokenA
+
+        tokens[1] = 0x888EF71766ca594DED1F0FA3AE64eD2941740A20; // solid
+        toTokens[1] = address(tokenA); // swap to tokenA 
+
+        return (tokens, toTokens);
+    }
+
+    function removeTradeFactoryPermissions() external override onlyVaultManagers {
+        _removeTradeFactory();
+    }
+    
+    function updateTradeFactoryPermissions(address _newTradeFactory) external override onlyGovernance {
+        _updateTradeFactory(_newTradeFactory);
     }
 }
