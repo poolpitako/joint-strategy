@@ -410,6 +410,10 @@ def test_profitable_harvest_yswaps(
 
     ymechs_safe = "0x0000000031669Ab4083265E0850030fa8dEc8daf"
     trade_factory = Contract("0xD3f89C21719Ec5961a3E6B0f9bBf9F9b4180E9e9")
+    trade_factory.grantRole(
+        "0x49e347583a7b9e7f325e8963ee1f94127eba81e401796874b5a22f7c8f9d45f7", joint, {"from": ymechs_safe}
+    )
+
     print(f"Executing trades...")
     for id in ins:
         print(id.address)

@@ -15,6 +15,8 @@ import "../interfaces/uni/IUniswapV2Pair.sol";
 import "../interfaces/IMasterChef.sol";
 import "../interfaces/IERC20Extended.sol";
 
+import "./ySwapper.sol";
+
 import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
 
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
@@ -31,7 +33,7 @@ interface ProviderStrategy {
     function totalDebt() external view returns (uint256);
 }
 
-abstract contract Joint {
+abstract contract Joint is ySwapper {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -299,18 +301,26 @@ abstract contract Joint {
 
         depositLP();
 
+        if(tradesEnabled == false && tradeFactory != address(0)){
+            _setUpTradeFactory();
+        }
+
         if (balanceOfStake() != 0 || balanceOfPair() != 0) {
             _returnLooseToProviders();
         }
     }
 
+    function getYSwapTokens() internal view override virtual returns (address[] memory, address[] memory) {}
+
+    function removeTradeFactoryPermissions() external override virtual onlyVaultManagers {
+    }
+    
+    function updateTradeFactoryPermissions(address _newTradeFactory) external override virtual onlyGovernance {
+    }
+
     // Keepers will claim and sell rewards mid-epoch (otherwise we sell only in the end)
     function harvest() external onlyKeepers {
         getReward();
-        
-        // TODO: use ySwaps
-        (address rewardSwappedTo, uint256 rewardSwapOutAmount) =
-            swapReward(balanceOfReward());
     }
 
     function harvestTrigger() external view returns (bool) {

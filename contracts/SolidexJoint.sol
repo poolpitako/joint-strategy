@@ -14,7 +14,7 @@ interface ISolidlyPair is IUniswapV2Pair {
         returns (uint256);
 }
 
-contract SolidexJoint is NoHedgeJoint, ySwapper {
+contract SolidexJoint is NoHedgeJoint {
     ISolidex public solidex;
     bool public stable;
     bool public dontWithdraw;
