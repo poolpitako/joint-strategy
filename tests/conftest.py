@@ -493,7 +493,7 @@ def first_sync(joint):
     relayer = "0x33E0E07cA86c869adE3fc9DE9126f6C73DAD105e"
     imp = Contract("0x5bfab94edE2f4d911A6CC6d06fdF2d43aD3c7068")
     lp_token = Contract(joint.pair())
-    (reserve0, reserve1, a) = lp_token.getReserves()
+    (reserve0, reserve1, _) = lp_token.getReserves()
     ftm_price = reserve0 / reserve1 * 10 ** (9 + 12)
     print(f"Current price is: {ftm_price/1e9}")
     imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {"from": relayer})
@@ -513,3 +513,23 @@ def reset_tenderly_fork():
     gas_price(0)
     # web3.manager.request_blocking("evm_revert", [1])
     yield
+
+
+@pytest.fixture()
+def trade_factory(joint):
+    yield Contract(joint.tradeFactory())
+
+
+@pytest.fixture()
+def yMechs_multisig():
+    yield accounts.at(
+        "0x9f2A061d6fEF20ad3A656e23fd9C814b75fd5803", force=True
+    )
+
+
+@pytest.fixture(scope="function", autouse=True)
+def auth_yswaps(joint, trade_factory, yMechs_multisig):
+    gas_price(0)
+    trade_factory.grantRole(
+        trade_factory.STRATEGY(), joint, {"from": yMechs_multisig, "gas_price": 0}
+    )

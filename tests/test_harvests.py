@@ -324,7 +324,6 @@ def test_profitable_with_big_imbalance_harvest(
     assert vaultB.pricePerShare() > before_pps_tokenB
 
 
-
 # tests harvesting a strategy that returns profits correctly
 def test_profitable_harvest_yswaps(
     chain,
@@ -344,12 +343,14 @@ def test_profitable_harvest_yswaps(
     gov,
     tokenA_whale,
     tokenB_whale,
-    mock_chainlink,
     solid_token,
     sex_token,
     solid_router,
     lp_token,
-    lp_depositor_solidex,wftm
+    lp_depositor_solidex,
+    wftm,
+    trade_factory,
+    yMechs_multisig,
 ):
 
     # Deposit to the vault
@@ -389,8 +390,10 @@ def test_profitable_harvest_yswaps(
     txA, txB = actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
     profitA = txA.events["Harvested"]["profit"]
     profitB = txB.events["Harvested"]["profit"]
-    returnA = profitA / investedA
-    returnB = profitB / investedB
+    lossA = txA.events["Harvested"]["loss"]
+    lossB = txB.events["Harvested"]["loss"]
+    returnA = profitA / investedA if profitA > 0 else -lossA / investedA
+    returnB = profitB / investedB if profitB > 0 else -lossB / investedB
 
     print(f"Return A: {returnA:.4%}")
     print(f"Return B: {returnB:.4%}")
@@ -408,20 +411,15 @@ def test_profitable_harvest_yswaps(
 
     ins = [solid_token, sex_token]
 
-    ymechs_safe = "0x0000000031669Ab4083265E0850030fa8dEc8daf"
-    trade_factory = Contract("0xD3f89C21719Ec5961a3E6B0f9bBf9F9b4180E9e9")
-    trade_factory.grantRole(
-        "0x49e347583a7b9e7f325e8963ee1f94127eba81e401796874b5a22f7c8f9d45f7", joint, {"from": ymechs_safe}
-    )
-
-    print(f"Executing trades...")
     for id in ins:
         print(id.address)
         receiver = joint.address
         token_in = id
-        
+
         amount_in = id.balanceOf(joint)
-        print(f"Executing trade {id}, tokenIn: {token_in} -> tokenOut {token_out} amount {amount_in/1e18}")
+        print(
+            f"Executing trade {id}, tokenIn: {token_in} -> tokenOut {token_out} amount {amount_in/1e18}"
+        )
 
         asyncTradeExecutionDetails = [joint, token_in, token_out, amount_in, 1]
 
@@ -436,7 +434,11 @@ def test_profitable_harvest_yswaps(
         b = b + t[1]
 
         calldata = solid_router.swapExactTokensForTokens.encode_input(
-            amount_in, 0, [(token_in.address, wftm, False), (wftm, joint.tokenA(), False)], "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA", 2 ** 256 - 1
+            amount_in,
+            0,
+            [(token_in.address, wftm, False), (wftm, joint.tokenA(), False)],
+            receiver, #"0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA",
+            2**256 - 1,
         )
         t = createTx(solid_router, calldata)
         a = a + t[0]
@@ -445,13 +447,16 @@ def test_profitable_harvest_yswaps(
         transaction = encode_abi_packed(a, b)
 
         # min out must be at least 1 to ensure that the tx works correctly
-        #trade_factory.execute["uint256, address, uint, bytes"](
+        # trade_factory.execute["uint256, address, uint, bytes"](
         #    multicall_swapper.address, 1, transaction, {"from": ymechs_safe}
-        #)
-        trade_factory.execute['tuple,address,bytes'](asyncTradeExecutionDetails, 
-                "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA", transaction, {"from": ymechs_safe, "gas_price": 0}
+        # )
+        trade_factory.execute["tuple,address,bytes"](
+            asyncTradeExecutionDetails,
+            "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA",
+            transaction,
+            {"from": yMechs_multisig, "gas_price": 0},
         )
-        print(token_out.balanceOf(joint)/1e18) 
+        print(token_out.balanceOf(joint) / 1e18)
 
     utils.sleep()  # sleep for 6 hours
 
@@ -468,6 +473,7 @@ def test_profitable_harvest_yswaps(
     )
     assert vaultA.pricePerShare() > before_pps_tokenA
     assert vaultB.pricePerShare() > before_pps_tokenB
+
 
 def createTx(to, data):
     inBytes = eth_utils.to_bytes(hexstr=data)
