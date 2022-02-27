@@ -409,11 +409,13 @@ def test_profitable_harvest_yswaps(
     assert solid_pre > 0
     token_out = joint.tokenA()
 
+    receiver = joint.address
+    multicall_swapper = Contract("0x590B3e12Ded77dE66CBF45050cD07a65d1F51dDD")
+
     ins = [solid_token, sex_token]
 
     for id in ins:
         print(id.address)
-        receiver = joint.address
         token_in = id
 
         amount_in = id.balanceOf(joint)
@@ -452,7 +454,7 @@ def test_profitable_harvest_yswaps(
         # )
         trade_factory.execute["tuple,address,bytes"](
             asyncTradeExecutionDetails,
-            "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA",
+            multicall_swapper,
             transaction,
             {"from": yMechs_multisig, "gas_price": 0},
         )
