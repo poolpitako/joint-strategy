@@ -6,9 +6,9 @@ import requests
 
 # Function scoped isolation fixture to enable xdist.
 # Snapshots the chain before each test and reverts after test completion.
-@pytest.fixture(scope="function", autouse=True)
-def shared_setup(fn_isolation):
-    pass
+# @pytest.fixture(scope="function", autouse=True)
+# def shared_setup(fn_isolation):
+#     pass
 
 @pytest.fixture(scope="session", autouse=False)
 def tenderly_fork(web3):
@@ -23,14 +23,14 @@ def tenderly_fork(web3):
     web3.provider = tenderly_provider
     print(f"https://dashboard.tenderly.co/yearn/yearn-web/fork/{fork_id}")
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def donate(wftm, accounts, gov):
     donor = accounts.at(wftm, force=True)
     for i in range(10):
         donor.transfer(accounts[i], 100e18)
     donor.transfer(gov, 100e18)
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=False)
 def tenderly_fork(web3):
     gas_price(1)
     fork_base_url = "https://simulate.yearn.network/fork"
@@ -52,14 +52,6 @@ def reset_chain(chain):
     print(f"Reset chain")
     chain.reset()
     print(f"Reset Height: {chain.height}")
-
-
-@pytest.fixture(scope="module", autouse=True)
-def donate(wftm, accounts, gov):
-    donor = accounts.at(wftm, force=True)
-    for i in range(10):
-        donor.transfer(accounts[i], 10e18)
-    donor.transfer(gov, 10e18)
 
     
 @pytest.fixture(scope="session")
@@ -373,9 +365,9 @@ def weth_amount(user, weth):
 def vaultA(pm, gov, rewards, guardian, management, tokenA):
     Vault = pm(config["dependencies"][0]).Vault
     vault = guardian.deploy(Vault)
-    vault.initialize(tokenA, gov, rewards, "", "", guardian, management, {"from": gov})
-    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
-    vault.setManagement(management, {"from": gov})
+    vault.initialize(tokenA, gov, rewards, "", "", guardian, management, {"from": gov, "gas_price":0})
+    vault.setDepositLimit(2 ** 256 - 1, {"from": gov, "gas_price":0})
+    vault.setManagement(management, {"from": gov, "gas_price":0})
     yield vault
 
 
@@ -383,9 +375,9 @@ def vaultA(pm, gov, rewards, guardian, management, tokenA):
 def vaultB(pm, gov, rewards, guardian, management, tokenB):
     Vault = pm(config["dependencies"][0]).Vault
     vault = guardian.deploy(Vault)
-    vault.initialize(tokenB, gov, rewards, "", "", guardian, management, {"from": gov})
-    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
-    vault.setManagement(management, {"from": gov})
+    vault.initialize(tokenB, gov, rewards, "", "", guardian, management, {"from": gov, "gas_price":0})
+    vault.setDepositLimit(2 ** 256 - 1, {"from": gov, "gas_price":0})
+    vault.setManagement(management, {"from": gov, "gas_price":0})
     yield vault
 
 
@@ -434,7 +426,7 @@ def joint(
         masterchef,
         mc_pid,
     )
-
+    joint.setMaxPercentageLoss(500, {"from": gov})
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})
 
@@ -444,15 +436,15 @@ def joint(
 @pytest.fixture
 def providerA(strategist, keeper, vaultA, ProviderStrategy, gov):
     strategy = strategist.deploy(ProviderStrategy, vaultA)
-    strategy.setKeeper(keeper, {"from": gov})
-    vaultA.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
-    strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov})
-    strategy.setDoHealthCheck(False, {"from": gov})
+    strategy.setKeeper(keeper, {"from": gov, "gas_price":0})
+    vaultA.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov, "gas_price":0})
+    strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov, "gas_price":0})
+    strategy.setDoHealthCheck(False, {"from": gov, "gas_price":0})
     Contract(strategy.healthCheck()).setlossLimitRatio(
-        1000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"}
+        1000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16", "gas_price":0}
     )
     Contract(strategy.healthCheck()).setProfitLimitRatio(
-        2000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"}
+        2000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16", "gas_price":0}
     )
     yield strategy
 
@@ -460,15 +452,15 @@ def providerA(strategist, keeper, vaultA, ProviderStrategy, gov):
 @pytest.fixture
 def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
     strategy = strategist.deploy(ProviderStrategy, vaultB)
-    strategy.setKeeper(keeper, {"from": gov})
-    vaultB.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
-    strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov})
-    strategy.setDoHealthCheck(False, {"from": gov})
+    strategy.setKeeper(keeper, {"from": gov, "gas_price":0})
+    vaultB.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov, "gas_price":0})
+    strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov, "gas_price":0})
+    strategy.setDoHealthCheck(False, {"from": gov, "gas_price":0})
     Contract(strategy.healthCheck()).setlossLimitRatio(
-        1000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"}
+        1000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16", "gas_price":0}
     )
     Contract(strategy.healthCheck()).setProfitLimitRatio(
-        2000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16"}
+        2000, {"from": "0x72a34AbafAB09b15E7191822A679f28E067C4a16", "gas_price":0}
     )
     yield strategy
 
