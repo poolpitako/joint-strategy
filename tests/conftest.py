@@ -31,6 +31,20 @@ def donate(wftm, accounts, gov):
     donor.transfer(gov, 100e18)
 
 @pytest.fixture(scope="session", autouse=True)
+def tenderly_fork(web3):
+    gas_price(1)
+    fork_base_url = "https://simulate.yearn.network/fork"
+    payload = {"network_id": "250"}
+    resp = requests.post(fork_base_url, headers={}, json=payload)
+    fork_id = resp.json()["simulation_fork"]["id"]
+    fork_rpc_url = f"https://rpc.tenderly.co/fork/{fork_id}"
+    print(fork_rpc_url)
+    tenderly_provider = web3.HTTPProvider(fork_rpc_url, {"timeout": 600})
+    web3.provider = tenderly_provider
+    print(f"https://dashboard.tenderly.co/yearn/yearn-web/fork/{fork_id}")
+
+
+@pytest.fixture(scope="session", autouse=True)
 def reset_chain(chain):
     print(f"Initial Height: {chain.height}")
     yield
@@ -40,6 +54,14 @@ def reset_chain(chain):
     print(f"Reset Height: {chain.height}")
 
 
+@pytest.fixture(scope="module", autouse=True)
+def donate(wftm, accounts, gov):
+    donor = accounts.at(wftm, force=True)
+    for i in range(10):
+        donor.transfer(accounts[i], 10e18)
+    donor.transfer(gov, 10e18)
+
+    
 @pytest.fixture(scope="session")
 def gov(accounts):
     yield accounts.at("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", force=True)
@@ -384,8 +406,6 @@ def live_vaultB(registry, tokenB):
 
 @pytest.fixture
 def joint(
-    strategist,
-    keeper,
     providerA,
     providerB,
     SpookyJoint,
@@ -502,6 +522,7 @@ def withdraw_no_losses(vault, token, amount, user):
 
 @pytest.fixture(scope="session", autouse=False)
 def LPHedgingLibrary(LPHedgingLib, gov):
+
     yield gov.deploy(LPHedgingLib)
 
 
@@ -555,16 +576,18 @@ def reset_tenderly_fork():
     yield
 
 
-@pytest.fixture()
-def trade_factory(joint):
-    yield Contract(joint.tradeFactory())
+@pytest.fixture(autouse=True)
+def trade_factory(joint, yMechs_multisig):
+    tf = Contract(joint.tradeFactory())
+    tf.grantRole(tf.STRATEGY(), joint, {"from": yMechs_multisig, "gas_price": 0})
+    yield tf
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def yMechs_multisig():
     yield accounts.at("0x9f2A061d6fEF20ad3A656e23fd9C814b75fd5803", force=True)
 
-
+    
 @pytest.fixture(scope="function", autouse=True)
 def auth_yswaps(joint, trade_factory, yMechs_multisig):
     gas_price(0)

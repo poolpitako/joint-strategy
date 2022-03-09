@@ -62,26 +62,26 @@ abstract contract Joint is ySwapper {
     uint256 public maxPercentageLoss;
     uint256 public minRewardToHarvest;
 
-    modifier onlyGovernance {
+    modifier onlyGovernance() {
         checkGovernance();
         _;
     }
 
-    modifier onlyVaultManagers {
+    modifier onlyVaultManagers() {
         checkVaultManagers();
         _;
     }
 
-    modifier onlyProviders {
+    modifier onlyProviders() {
         checkProvider();
         _;
     }
 
-    modifier onlyKeepers {
+    modifier onlyKeepers() {
         checkKeepers();
         _;
     }
-            
+
     function checkKeepers() internal {
         require(isKeeper() || isGovernance() || isVaultManager());
     }
@@ -111,7 +111,7 @@ abstract contract Joint is ySwapper {
     }
 
     function isKeeper() internal returns (bool) {
-        return 
+        return
             (msg.sender == providerA.keeper()) ||
             (msg.sender == providerB.keeper());
     }
@@ -146,8 +146,10 @@ abstract contract Joint is ySwapper {
         WETH = _weth;
         reward = _reward;
 
+        tradeFactory = address(0xD3f89C21719Ec5961a3E6B0f9bBf9F9b4180E9e9);
+
         // NOTE: we let some loss to avoid getting locked in the position if something goes slightly wrong
-        maxPercentageLoss = 500; // 0.1%
+        maxPercentageLoss = 10; // 0.10%
 
         tokenA = address(providerA.want());
         tokenB = address(providerB.want());
@@ -168,7 +170,10 @@ abstract contract Joint is ySwapper {
 
     function shouldStartEpoch() public view returns (bool) {
         // return true if we have balance of A or balance of B while the position is closed
-        return (balanceOfA() > 0 || balanceOfB() > 0) && investedA == 0 && investedB == 0;
+        return
+            (balanceOfA() > 0 || balanceOfB() > 0) &&
+            investedA == 0 &&
+            investedB == 0;
     }
 
     function setDontInvestWant(bool _dontInvestWant)
@@ -184,7 +189,6 @@ abstract contract Joint is ySwapper {
     {
         minRewardToHarvest = _minRewardToHarvest;
     }
-
 
     function setMinAmountToSell(uint256 _minAmountToSell)
         external
@@ -301,7 +305,7 @@ abstract contract Joint is ySwapper {
 
         depositLP();
 
-        if(tradesEnabled == false && tradeFactory != address(0)){
+        if (tradesEnabled == false && tradeFactory != address(0)) {
             _setUpTradeFactory();
         }
 
@@ -310,13 +314,27 @@ abstract contract Joint is ySwapper {
         }
     }
 
-    function getYSwapTokens() internal view override virtual returns (address[] memory, address[] memory) {}
+    function getYSwapTokens()
+        internal
+        view
+        virtual
+        override
+        returns (address[] memory, address[] memory)
+    {}
 
-    function removeTradeFactoryPermissions() external override virtual onlyVaultManagers {
-    }
-    
-    function updateTradeFactoryPermissions(address _newTradeFactory) external override virtual onlyGovernance {
-    }
+    function removeTradeFactoryPermissions()
+        external
+        virtual
+        override
+        onlyVaultManagers
+    {}
+
+    function updateTradeFactoryPermissions(address _newTradeFactory)
+        external
+        virtual
+        override
+        onlyGovernance
+    {}
 
     // Keepers will claim and sell rewards mid-epoch (otherwise we sell only in the end)
     function harvest() external onlyKeepers {
@@ -409,7 +427,7 @@ abstract contract Joint is ySwapper {
         uint256 currentB,
         uint256 startingA,
         uint256 startingB
-    ) internal virtual view returns (address _sellToken, uint256 _sellAmount) {
+    ) internal view virtual returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
         (uint256 ratioA, uint256 ratioB) =
@@ -572,8 +590,8 @@ abstract contract Joint is ySwapper {
     function withdrawLP() internal virtual;
 
     function swapReward(uint256 _rewardBal)
-        virtual 
         internal
+        virtual
         returns (address, uint256)
     {
         if (reward == tokenA || reward == tokenB || _rewardBal == 0) {
@@ -643,12 +661,12 @@ abstract contract Joint is ySwapper {
     {
         balanceA = balanceOfA();
         if (balanceA > 0) {
-            IERC20(tokenA).transfer(address(providerA), balanceA);
+            IERC20(tokenA).safeTransfer(address(providerA), balanceA);
         }
 
         balanceB = balanceOfB();
         if (balanceB > 0) {
-            IERC20(tokenB).transfer(address(providerB), balanceB);
+            IERC20(tokenB).safeTransfer(address(providerB), balanceB);
         }
     }
 

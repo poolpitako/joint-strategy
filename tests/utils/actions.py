@@ -5,7 +5,7 @@ from utils import checks, utils
 # This file is reserved for standard actions like deposits
 def user_deposit(user, vault, token, amount):
     if token.allowance(user, vault) < amount:
-        token.approve(vault, 2 ** 256 - 1, {"from": user})
+        token.approve(vault, 2**256 - 1, {"from": user})
     vault.deposit(amount, {"from": user})
     assert token.balanceOf(vault.address) == amount
 
@@ -114,7 +114,7 @@ def swap(tokenFrom, tokenTo, amountFrom, tokenFrom_whale, joint, mock_chainlink)
         0,
         [tokenFrom, tokenTo],
         tokenFrom_whale,
-        2 ** 256 - 1,
+        2**256 - 1,
         {"from": tokenFrom_whale, "gas_price": 0},
     )
     reserveA, reserveB = joint.getReserves()

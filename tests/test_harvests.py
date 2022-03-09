@@ -329,23 +329,7 @@ def test_profitable_harvest_yswaps(
     # Harvest 2: Realize profit
     chain.sleep(1)
 
-    investedA, investedB = joint.investedA(), joint.investedB()
-
-    txA, txB = actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
-    profitA = txA.events["Harvested"]["profit"]
-    profitB = txB.events["Harvested"]["profit"]
-    lossA = txA.events["Harvested"]["loss"]
-    lossB = txB.events["Harvested"]["loss"]
-    returnA = profitA / investedA if profitA > 0 else -lossA / investedA
-    returnB = profitB / investedB if profitB > 0 else -lossB / investedB
-
-    print(f"Return A: {returnA:.4%}")
-    print(f"Return B: {returnB:.4%}")
-    assert profitA == 0
-    assert profitB == 0
-
-    # Return approximately equal
-    assert pytest.approx(returnA, rel=RELATIVE_APPROX) == returnB
+    joint.claimRewardManually()
 
     token_out = joint.tokenA()
 
@@ -360,7 +344,7 @@ def test_profitable_harvest_yswaps(
 
         amount_in = id.balanceOf(joint)
         print(
-            f"Executing trade {id}, tokenIn: {token_in} -> tokenOut {token_out} amount {amount_in/1e18}"
+            f"Executing trade {id}, tokenIn: {token_in.symbol()} -> tokenOut {token_out.symbol()} w/ amount in {amount_in/1e18}"
         )
 
         asyncTradeExecutionDetails = [joint, token_in, token_out, amount_in, 1]
@@ -380,6 +364,7 @@ def test_profitable_harvest_yswaps(
             0,
             [(token_in.address, wftm, False), (wftm, joint.tokenA(), False)],
             receiver,  # "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA",
+
             2 ** 256 - 1,
         )
         t = createTx(solid_router, calldata)
@@ -398,7 +383,32 @@ def test_profitable_harvest_yswaps(
             transaction,
             {"from": yMechs_multisig, "gas_price": 0},
         )
-        print(token_out.balanceOf(joint) / 1e18)
+        print(
+            f"Joint {token_out.symbol()} balance: {token_out.balanceOf(joint)/10**token_out.decimals():.6f}"
+        )
+
+    solid_post = solid_token.balanceOf(joint)
+    sex_post = sex_token.balanceOf(joint)
+    assert solid_post == 0
+    assert sex_post == 0
+
+    investedA, investedB = joint.investedA(), joint.investedB()
+
+    txA, txB = actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
+    profitA = txA.events["Harvested"]["profit"]
+    profitB = txB.events["Harvested"]["profit"]
+    lossA = txA.events["Harvested"]["loss"]
+    lossB = txB.events["Harvested"]["loss"]
+    returnA = profitA / investedA if profitA > 0 else -lossA / investedA
+    returnB = profitB / investedB if profitB > 0 else -lossB / investedB
+
+    print(f"Return A: {returnA:.4%}")
+    print(f"Return B: {returnB:.4%}")
+    assert profitA > 0
+    assert profitB > 0
+
+    # Return approximately equal
+    assert pytest.approx(returnA, rel=RELATIVE_APPROX) == returnB
 
     utils.sleep()  # sleep for 6 hours
 
@@ -413,8 +423,8 @@ def test_profitable_harvest_yswaps(
         pytest.approx(total_balance_tokenB, rel=5 * 1e-3)
         == amountB + profit_amount_tokenB
     )
-    assert vaultA.pricePerShare() > before_pps_tokenA
-    assert vaultB.pricePerShare() > before_pps_tokenB
+    assert vaultA.pricePerShare() >= before_pps_tokenA
+    assert vaultB.pricePerShare() >= before_pps_tokenB
 
 
 def createTx(to, data):
