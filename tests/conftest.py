@@ -24,8 +24,7 @@ def reset_chain(chain):
 
 @pytest.fixture
 def gov(accounts):
-    accounts[0].transfer("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", 10e18)
-    accounts[0].transfer(accounts[0], 10e18)
+    accounts[0].transfer("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", 100e18)
     yield accounts.at("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", force=True)
 
 
@@ -68,36 +67,25 @@ def strategist(accounts):
 def keeper(accounts):
     yield accounts[5]
 
+
 @pytest.fixture
 def hedgilV2():
     yield Contract("0x2bBA5035AeBED1d0f546e31C07c462C1ed9B7597")
+
 
 @pytest.fixture
 def chainlink_owner():
     yield accounts.at("0x9ba4c51512752E79317b59AB4577658e12a43f55", force=True)
 
+
 @pytest.fixture
 def deployer(accounts):
     yield accounts.at("0xcc4c922db2ef8c911f37e73c03b632dd1585ad0e", force=True)
 
+
 @pytest.fixture
 def dai():
     yield Contract(token_addresses["DAI"])
-
-
-@pytest.fixture
-def solid_token():
-    yield Contract("0x888EF71766ca594DED1F0FA3AE64eD2941740A20")
-
-
-@pytest.fixture
-def sex_token():
-    yield Contract("0xD31Fcd1f7Ba190dBc75354046F6024A9b86014d7")
-
-
-@pytest.fixture
-def solid_router():
-    yield Contract("0xa38cd27185a464914D3046f0AB9d43356B34829D")
 
 
 @pytest.fixture
@@ -139,8 +127,8 @@ token_addresses = {
         # 'USDT', # USDT
         # 'DAI', # DAI
         # "WFTM",
-        'USDC', # USDC
-        # "WFTM", 
+        "USDC",  # USDC
+        # "WFTM",
     ],
     scope="session",
     autouse=True,
@@ -159,7 +147,7 @@ def tokenA(request):
         # 'USDT', # USDT
         # 'DAI', # DAI
         # "USDC",  # USDC
-        'WFTM',
+        "WFTM",
         # "MIM",
     ],
     scope="session",
@@ -170,7 +158,6 @@ def tokenB(request):
 
 
 whale_addresses = {
-<<<<<<< HEAD
     "SOLID": "0x1d1A1871d1830D4b5087212c820E5f1252379c2c",
     "SEX": "0x1434f19804789e494E271F9CeF8450e51790fcD2",
     "YFI": "0x29b0Da86e484E1C0029B56e817912d778aC0EC69",
@@ -183,16 +170,13 @@ whale_addresses = {
     "BOO": "0xE0c15e9Fe90d56472D8a43da5D3eF34ae955583C",
 }
 
-lp_whales = {
-    "BOO": {
-        "USDC": {
-            "WFTM": "0xE6939A804b3C7570Ff5f36c1f0d886dAD4b4A204"
-        }
-    }
-} 
+lp_whales = {"BOO": {"USDC": {"WFTM": "0xE6939A804b3C7570Ff5f36c1f0d886dAD4b4A204"}}}
+
+
 @pytest.fixture(scope="session", autouse=True)
 def lp_whale(rewards, tokenA, tokenB):
     yield lp_whales[rewards.symbol()][tokenA.symbol()][tokenB.symbol()]
+
 
 @pytest.fixture(scope="session", autouse=True)
 def tokenA_whale(tokenA):
@@ -261,7 +245,6 @@ def mc_pid(tokenA, tokenB):
 
 
 router_addresses = {
-    "SUSHI": "",
     "SPIRIT": "0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52",
     "SPOOKY": "0xF491e7B69E4244ad4002BC14e878a34207E38c29",
     "BOO": "0xF491e7B69E4244ad4002BC14e878a34207E38c29",
@@ -272,20 +255,24 @@ router_addresses = {
 def router(rewards):
     yield Contract(router_addresses[rewards.symbol()])
 
+
 # Non-comprehensive, find the full list here to add your own: https://docs.chain.link/docs/fantom-price-feeds/
 oracle_addresses = {
     "WFTM": "0xf4766552D15AE4d256Ad41B6cf2933482B0680dc",
     "USDC": "0x2553f4eeb82d5A26427b8d1106C51499CBa5D99c",
-    "MIM": "0x28de48D3291F31F839274B8d82691c77DF1c5ceD"
+    "MIM": "0x28de48D3291F31F839274B8d82691c77DF1c5ceD",
 }
+
 
 @pytest.fixture
 def tokenA_oracle(tokenA):
     yield Contract(oracle_addresses[tokenA.symbol()])
 
+
 @pytest.fixture
 def tokenB_oracle(tokenB):
     yield Contract(oracle_addresses[tokenB.symbol()])
+
 
 @pytest.fixture
 def weth():
@@ -311,7 +298,7 @@ def mim():
     yield Contract(token_address)
 
 
-@pytest.fixture(params=["SEX"], scope="session", autouse=True)
+@pytest.fixture(params=["BOO"], scope="session", autouse=True)
 def rewards(request):
     rewards_address = token_addresses[request.param]  # sushi
     yield Contract(rewards_address)
@@ -348,7 +335,7 @@ def vaultA(pm, gov, rewards, guardian, management, tokenA):
     Vault = pm(config["dependencies"][0]).Vault
     vault = guardian.deploy(Vault)
     vault.initialize(tokenA, gov, rewards, "", "", guardian, management, {"from": gov})
-    vault.setDepositLimit(2**256 - 1, {"from": gov})
+    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
     vault.setManagement(management, {"from": gov})
     yield vault
 
@@ -358,7 +345,7 @@ def vaultB(pm, gov, rewards, guardian, management, tokenB):
     Vault = pm(config["dependencies"][0]).Vault
     vault = guardian.deploy(Vault)
     vault.initialize(tokenB, gov, rewards, "", "", guardian, management, {"from": gov})
-    vault.setDepositLimit(2**256 - 1, {"from": gov})
+    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
     vault.setManagement(management, {"from": gov})
     yield vault
 
@@ -384,10 +371,10 @@ def joint(
     keeper,
     providerA,
     providerB,
-    SolidexJoint,
-    solid_router,
+    SpookyJoint,
     masterchef,
     rewards,
+    router,
     wftm,
     weth,
     mc_pid,
@@ -396,18 +383,15 @@ def joint(
     gov,
     tokenA,
     tokenB,
-    lp_depositor_solidex,
-    solid_token,
-    sex_token,
     stable,
 ):
     gas_price(0)
 
     joint = gov.deploy(
-        SolidexJoint,
+        SpookyJoint,
         providerA,
         providerB,
-        solid_router,
+        router,
         wftm,
         rewards,
         hedgilV2,
@@ -425,7 +409,7 @@ def joint(
 def providerA(strategist, keeper, vaultA, ProviderStrategy, gov):
     strategy = strategist.deploy(ProviderStrategy, vaultA)
     strategy.setKeeper(keeper, {"from": gov})
-    vaultA.addStrategy(strategy, 10_000, 0, 2**256 - 1, 1_000, {"from": gov})
+    vaultA.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov})
     strategy.setDoHealthCheck(False, {"from": gov})
     Contract(strategy.healthCheck()).setlossLimitRatio(
@@ -441,7 +425,7 @@ def providerA(strategist, keeper, vaultA, ProviderStrategy, gov):
 def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
     strategy = strategist.deploy(ProviderStrategy, vaultB)
     strategy.setKeeper(keeper, {"from": gov})
-    vaultB.addStrategy(strategy, 10_000, 0, 2**256 - 1, 1_000, {"from": gov})
+    vaultB.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     strategy.setHealthCheck("0xf13Cd6887C62B5beC145e30c38c4938c5E627fe0", {"from": gov})
     strategy.setDoHealthCheck(False, {"from": gov})
     Contract(strategy.healthCheck()).setlossLimitRatio(
@@ -454,19 +438,25 @@ def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
 
 
 hedgil_pools = {
-        "WFTM" :
-            {
-                "MIM": "0x150C42e9CB21354030967579702e0f010e208E86",
-                "USDC": "0x8C2cC5ff69Bc3760d7Ce81812A2848421495972A",
-            }
+    "WFTM": {
+        "MIM": "0x150C42e9CB21354030967579702e0f010e208E86",
+        "USDC": "0x8C2cC5ff69Bc3760d7Ce81812A2848421495972A",
     }
 }
 
 
 @pytest.fixture(autouse=True)
-def provideLiquidity(hedgilV2, tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB):
-    tokenB.approve(hedgilV2, 2 ** 256 - 1, {'from': tokenB_whale, 'gas_price': '0'})
-    hedgilV2.provideLiquidity(100_000 * 10 ** tokenB.decimals(), 0, tokenB_whale, {'from': tokenB_whale, 'gas_price': '0'})
+def provideLiquidity(
+    hedgilV2, tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB
+):
+    tokenB.approve(hedgilV2, 2 ** 256 - 1, {"from": tokenB_whale, "gas_price": "0"})
+    hedgilV2.provideLiquidity(
+        100_000 * 10 ** tokenB.decimals(),
+        0,
+        tokenB_whale,
+        {"from": tokenB_whale, "gas_price": "0"},
+    )
+
 
 # @pytest.fixture
 # def cloned_strategy(Strategy, vault, strategy, strategist, gov):
@@ -556,9 +546,7 @@ def trade_factory(joint):
 
 @pytest.fixture()
 def yMechs_multisig():
-    yield accounts.at(
-        "0x9f2A061d6fEF20ad3A656e23fd9C814b75fd5803", force=True
-    )
+    yield accounts.at("0x9f2A061d6fEF20ad3A656e23fd9C814b75fd5803", force=True)
 
 
 @pytest.fixture(scope="function", autouse=True)

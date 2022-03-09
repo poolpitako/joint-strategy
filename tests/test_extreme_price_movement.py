@@ -3,6 +3,7 @@ from utils import actions, checks, utils
 import pytest
 from brownie import Contract, chain
 
+
 def test_extreme_price_movement_tokenA(
     chain,
     accounts,
@@ -30,7 +31,7 @@ def test_extreme_price_movement_tokenA(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -54,14 +55,20 @@ def test_extreme_price_movement_tokenA(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 10% of tokenA reserves
-    tokenA_dump = lp_token.getReserves()[0] / 10 if lp_token.token0() == tokenA else lp_token.getReserves()[1] / 10
-    print(f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}")
+    tokenA_dump = (
+        lp_token.getReserves()[0] / 10
+        if lp_token.token0() == tokenA
+        else lp_token.getReserves()[1] / 10
+    )
+    print(
+        f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}"
+    )
     actions.dump_token(tokenA_whale, tokenA, tokenB, router, tokenA_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
-    
+
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
     # As we have dumped some A tokens, there should be more liquidity and hence our position should have
@@ -70,16 +77,25 @@ def test_extreme_price_movement_tokenA(
     assert current_amount_B < initial_amount_B
 
     tokenA_excess = current_amount_A - initial_amount_A
-    tokenA_excess_to_tokenB = utils.swap_tokens_value(router, tokenA, tokenB, tokenA_excess)
-    
-    # TokenB checksum: initial amount > current amount + tokenA excess in token B + hedgil payout as 
+    tokenA_excess_to_tokenB = utils.swap_tokens_value(
+        router, tokenA, tokenB, tokenA_excess
+    )
+
+    # TokenB checksum: initial amount > current amount + tokenA excess in token B + hedgil payout as
     # hedgil does not cover the entire IL, needed to be closed before!
-    total_B_value_now = current_amount_B + tokenA_excess_to_tokenB + hedgilV2.getCurrentPayout(hedgil_id)
+    total_B_value_now = (
+        current_amount_B
+        + tokenA_excess_to_tokenB
+        + hedgilV2.getCurrentPayout(hedgil_id)
+    )
     assert total_B_value_now < initial_amount_B
     # Initial amounts are not intact as there is an unhedged loss
     assert tokenA.balanceOf(providerA) + current_amount_A - tokenA_excess < amountA
-    assert tokenB.balanceOf(providerB) + total_B_value_now + hedgil_position["cost"] < amountB
-    
+    assert (
+        tokenB.balanceOf(providerB) + total_B_value_now + hedgil_position["cost"]
+        < amountB
+    )
+
     actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
     tokenA_loss = vaultA.strategies(providerA)["totalLoss"]
@@ -89,6 +105,7 @@ def test_extreme_price_movement_tokenA(
 
     # total loss in this case should be higher to cost of hedgil
     assert tokenB_loss + tokenA_loss_in_tokenB > hedgil_position["cost"]
+
 
 def test_extreme_price_movement_tokenA_with_rewards(
     chain,
@@ -117,7 +134,7 @@ def test_extreme_price_movement_tokenA_with_rewards(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -141,14 +158,20 @@ def test_extreme_price_movement_tokenA_with_rewards(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 10% of tokenA reserves
-    tokenA_dump = lp_token.getReserves()[0] / 10 if lp_token.token0() == tokenA else lp_token.getReserves()[1] / 10
-    print(f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}")
+    tokenA_dump = (
+        lp_token.getReserves()[0] / 10
+        if lp_token.token0() == tokenA
+        else lp_token.getReserves()[1] / 10
+    )
+    print(
+        f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}"
+    )
     actions.dump_token(tokenA_whale, tokenA, tokenB, router, tokenA_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
-    
+
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
     # As we have dumped some A tokens, there should be more liquidity and hence our position should have
@@ -172,9 +195,10 @@ def test_extreme_price_movement_tokenA_with_rewards(
 
     vaultA.strategies(providerA)["totalDebt"] == 0
     vaultB.strategies(providerB)["totalDebt"] == 0
-    
+
     vaultA.strategies(providerA)["totalGain"] > 0
     vaultB.strategies(providerB)["totalGain"] > 0
+
 
 def test_extreme_price_movement_tokenB(
     chain,
@@ -203,7 +227,7 @@ def test_extreme_price_movement_tokenB(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -227,14 +251,20 @@ def test_extreme_price_movement_tokenB(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 10% of tokenB reserves
-    tokenB_dump = lp_token.getReserves()[0] / 10 if lp_token.token0() == tokenB else lp_token.getReserves()[1] / 10
-    print(f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}")
+    tokenB_dump = (
+        lp_token.getReserves()[0] / 10
+        if lp_token.token0() == tokenB
+        else lp_token.getReserves()[1] / 10
+    )
+    print(
+        f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}"
+    )
     actions.dump_token(tokenB_whale, tokenB, tokenA, router, tokenB_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
-    
+
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
     # As we have dumped some B tokens, there should be more liquidity and hence our position should have
@@ -243,15 +273,23 @@ def test_extreme_price_movement_tokenB(
     assert current_amount_B > initial_amount_B
 
     tokenB_excess = current_amount_B - initial_amount_B
-    tokenB_excess_to_tokenA = utils.swap_tokens_value(router, tokenB, tokenA, tokenB_excess)
-    
+    tokenB_excess_to_tokenA = utils.swap_tokens_value(
+        router, tokenB, tokenA, tokenB_excess
+    )
+
     # TokenA checksum: initial amount > current amount + tokenB excess in token A
     total_A_value_now = current_amount_A + tokenB_excess_to_tokenA
     assert total_A_value_now < initial_amount_A
     # Initial amounts are not intact as there is an unhedged loss
-    assert tokenA.balanceOf(providerA) + total_A_value_now  < amountA
-    assert tokenB.balanceOf(providerB) + current_amount_B - tokenB_excess + hedgil_position["cost"] < amountB
-    
+    assert tokenA.balanceOf(providerA) + total_A_value_now < amountA
+    assert (
+        tokenB.balanceOf(providerB)
+        + current_amount_B
+        - tokenB_excess
+        + hedgil_position["cost"]
+        < amountB
+    )
+
     actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
     tokenA_loss = vaultA.strategies(providerA)["totalLoss"]
@@ -261,6 +299,7 @@ def test_extreme_price_movement_tokenB(
 
     # total loss in this case should be higher to cost of hedgil
     assert tokenB_loss + tokenA_loss_in_tokenB > hedgil_position["cost"]
+
 
 def test_extreme_price_movement_tokenB_with_rewards(
     chain,
@@ -289,7 +328,7 @@ def test_extreme_price_movement_tokenB_with_rewards(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -313,14 +352,20 @@ def test_extreme_price_movement_tokenB_with_rewards(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 10% of tokenB reserves
-    tokenB_dump = lp_token.getReserves()[0] / 10 if lp_token.token0() == tokenB else lp_token.getReserves()[1] / 10
-    print(f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}")
+    tokenB_dump = (
+        lp_token.getReserves()[0] / 10
+        if lp_token.token0() == tokenB
+        else lp_token.getReserves()[1] / 10
+    )
+    print(
+        f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}"
+    )
     actions.dump_token(tokenB_whale, tokenB, tokenA, router, tokenB_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
-    
+
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
     # As we have dumped some B tokens, there should be more liquidity and hence our position should have
@@ -344,6 +389,6 @@ def test_extreme_price_movement_tokenB_with_rewards(
 
     vaultA.strategies(providerA)["totalDebt"] == 0
     vaultB.strategies(providerB)["totalDebt"] == 0
-    
+
     vaultA.strategies(providerA)["totalGain"] > 0
     vaultB.strategies(providerB)["totalGain"] > 0

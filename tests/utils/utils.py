@@ -9,9 +9,10 @@ def sync_price(joint):
     imp = Contract("0x5bfab94edE2f4d911A6CC6d06fdF2d43aD3c7068")
     lp_token = Contract(joint.pair())
     (reserve0, reserve1, a) = lp_token.getReserves()
-    ftm_price = reserve1 / reserve0 *  10 ** 9
+    ftm_price = reserve1 / reserve0 * 10 ** 9
     print(f"Current price is: {ftm_price/1e9}")
-    imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {'from': relayer})
+    imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {"from": relayer})
+
 
 def print_hedge_status(joint, tokenA, tokenB):
     callID = joint.activeCallID()
@@ -39,9 +40,10 @@ def print_hedge_status(joint, tokenA, tokenB):
     print(f"\tPayout: {putPayout/1e6} {tokenB.symbol()}")
     return (costCall, costPut)
 
+
 def print_hedgil_status(joint, hedgil, tokenA, tokenB):
     print("############ HEDGIL V2 STATUS ############")
-    
+
     hedgil_id = joint.activeHedgeID()
     hedgil_position = hedgil.getHedgilByID(hedgil_id)
 
@@ -88,7 +90,7 @@ def from_units(token, amount):
 
 
 # default: 6 hours (sandwich protection)
-def sleep(seconds = 6 * 60 * 60):
+def sleep(seconds=6 * 60 * 60):
     chain.sleep(seconds)
     chain.mine(1)
 
@@ -110,6 +112,7 @@ def sleep_mine(seconds=13.15):
     chain.sleep(seconds - (end - start))
     chain.mine(1)
 
+
 def print_joint_status(joint, tokenA, tokenB, lp_token, rewards):
     token0 = lp_token.token0()
     (balA, balB) = joint.balanceOfTokensInLP()
@@ -118,16 +121,23 @@ def print_joint_status(joint, tokenA, tokenB, lp_token, rewards):
     resA = res0
     resB = res1
 
-    if(token0 == tokenB):
+    if token0 == tokenB:
         resA = res1
         resB = res0
     print("############ JOINT STATUS ############")
-    print(f"Invested tokens in pool: {balA} {tokenA.symbol()} and {balB} {tokenB.symbol()}")
-    print(f"Existing reserves in pool: {resA} {tokenA.symbol()} and {resB} {tokenB.symbol()}")
-    print(f"Ratio of joint to pool: {balA / resA} {tokenA.symbol()} and {balB / resB} {tokenB.symbol()}")
+    print(
+        f"Invested tokens in pool: {balA} {tokenA.symbol()} and {balB} {tokenB.symbol()}"
+    )
+    print(
+        f"Existing reserves in pool: {resA} {tokenA.symbol()} and {resB} {tokenB.symbol()}"
+    )
+    print(
+        f"Ratio of joint to pool: {balA / resA} {tokenA.symbol()} and {balB / resB} {tokenB.symbol()}"
+    )
     print(f"Staked LP tokens: {joint.balanceOfStake()} {lp_token.symbol()}")
     print(f"Total rewards gained: {joint.balanceOfReward() + joint.pendingReward()}")
     print("######################################")
+
 
 def swap_tokens_value(router, tokenIn, tokenOut, amountIn):
     return router.getAmountsOut(amountIn, [tokenIn, tokenOut])[1]

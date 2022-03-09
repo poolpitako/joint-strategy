@@ -75,7 +75,7 @@ def test_airdrop(
     chain.mine(1)
     profitA = tokenA.balanceOf(vaultA.address) - amountA  # Profits go to vaultA
     profitB = tokenB.balanceOf(vaultB.address) - amountB  # Profits go to vaultB
-    
+
     assert tokenA.balanceOf(vaultA) > amountA
     assert tokenB.balanceOf(vaultB) > amountB
     assert vaultA.pricePerShare() > before_ppsA
@@ -90,8 +90,8 @@ def test_airdrop_provider(chain, gov, tokenA, vaultA, providerA, tokenA_whale):
     # airdrop token
     airdrop_amountA = 1 * 10 ** tokenA.decimals()
 
-    tokenA.approve(providerA, airdrop_amountA, {"from": tokenA_whale, "gas_price":0})
-    tokenA.transfer(providerA, airdrop_amountA, {"from": tokenA_whale, "gas_price":0})
+    tokenA.approve(providerA, airdrop_amountA, {"from": tokenA_whale, "gas_price": 0})
+    tokenA.transfer(providerA, airdrop_amountA, {"from": tokenA_whale, "gas_price": 0})
 
     assert providerA.balanceOfWant() == airdrop_amountA
 

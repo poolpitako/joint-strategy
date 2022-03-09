@@ -68,7 +68,7 @@ abstract contract HedgilV2Joint is Joint {
         hedgilPool = _hedgilPool;
         require(IHedgilPool(_hedgilPool).quoteToken() == tokenB); // dev: tokenB != quotetoken
 
-        hedgeBudget = 50; // 0.5% per hedging period
+        hedgeBudget = 25; // 0.25% per hedging period
         protectionRange = 1000; // 10%
         period = 7 days;
         minTimeToMaturity = 3600; // 1 hour

@@ -45,7 +45,7 @@ def test_setup_positions(
 
     # No lp tokens should remain in the joint
     assert joint.balanceOfPair() == 0
-    # As they should be staked 
+    # As they should be staked
     assert joint.balanceOfStake() > 0
 
     # Get the hedgil open position
@@ -59,9 +59,9 @@ def test_setup_positions(
     (bal0, bal1) = joint.balanceOfTokensInLP()
     # Get lp_token
     lp_token = Contract(joint.pair())
-    
+
     # Ensure balances are comparable
-    if(lp_token.token0() == tokenA):
+    if lp_token.token0() == tokenA:
         balA = bal0
         balB = bal1
     else:
@@ -72,7 +72,12 @@ def test_setup_positions(
     # TokenA (other token) are either in lp pool or provider A
     assert pytest.approx(balA + tokenA.balanceOf(providerA), rel=1e-5) == amountA
     # TokenB (quote token) are either in lp pool, provider B or paid to hedgil
-    assert pytest.approx(balB + tokenB.balanceOf(providerB) + hedgil_position["cost"], rel=1e-5) == amountB
+    assert (
+        pytest.approx(
+            balB + tokenB.balanceOf(providerB) + hedgil_position["cost"], rel=1e-5
+        )
+        == amountB
+    )
 
     # Check ratios
     (reserve0, reserve1, _) = lp_token.getReserves()
@@ -83,6 +88,7 @@ def test_setup_positions(
     assert balA == hedgil_position["initialQ"]
     # Check that strike is current price
     assert hedgil_position["strike"] == hedgilV2.getCurrentPrice(tokenA)
+
 
 def test_open_position_price_change_tokenA(
     chain,
@@ -111,7 +117,7 @@ def test_open_position_price_change_tokenA(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -135,8 +141,14 @@ def test_open_position_price_change_tokenA(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 2% of tokenA reserves
-    tokenA_dump = lp_token.getReserves()[0] / 50 if lp_token.token0() == tokenA else lp_token.getReserves()[1] / 50
-    print(f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}")
+    tokenA_dump = (
+        lp_token.getReserves()[0] / 50
+        if lp_token.token0() == tokenA
+        else lp_token.getReserves()[1] / 50
+    )
+    print(
+        f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}"
+    )
     actions.dump_token(tokenA_whale, tokenA, tokenB, router, tokenA_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
@@ -151,17 +163,34 @@ def test_open_position_price_change_tokenA(
     assert current_amount_B < initial_amount_B
 
     tokenA_excess = current_amount_A - initial_amount_A
-    tokenA_excess_to_tokenB = utils.swap_tokens_value(router, tokenA, tokenB, tokenA_excess)
-    
-    # TokenB checksum: initial amount = current amount + tokenA excess in token B + hedgil payout 
-    total_B_value_now = current_amount_B + tokenA_excess_to_tokenB + hedgilV2.getCurrentPayout(hedgil_id)
+    tokenA_excess_to_tokenB = utils.swap_tokens_value(
+        router, tokenA, tokenB, tokenA_excess
+    )
+
+    # TokenB checksum: initial amount = current amount + tokenA excess in token B + hedgil payout
+    total_B_value_now = (
+        current_amount_B
+        + tokenA_excess_to_tokenB
+        + hedgilV2.getCurrentPayout(hedgil_id)
+    )
     assert pytest.approx(total_B_value_now, rel=1e-5) == initial_amount_B
     # Ensure that initial amounts are still intact taking all current data into account
     # A tokens are either in the provider strat or excess
-    assert pytest.approx(tokenA.balanceOf(providerA) + current_amount_A - tokenA_excess, rel=1e-5) == amountA
+    assert (
+        pytest.approx(
+            tokenA.balanceOf(providerA) + current_amount_A - tokenA_excess, rel=1e-5
+        )
+        == amountA
+    )
     # B tokens are either in provider strat, received from A excess, used to pay hedgil cost and received as hedgil payout
-    assert pytest.approx(tokenB.balanceOf(providerB) + total_B_value_now + hedgil_position["cost"], rel=1e-5) == amountB
-    
+    assert (
+        pytest.approx(
+            tokenB.balanceOf(providerB) + total_B_value_now + hedgil_position["cost"],
+            rel=1e-5,
+        )
+        == amountB
+    )
+
     actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
     tokenA_loss = vaultA.strategies(providerA)["totalLoss"]
@@ -170,7 +199,11 @@ def test_open_position_price_change_tokenA(
     tokenA_loss_in_tokenB = utils.swap_tokens_value(router, tokenA, tokenB, tokenA_loss)
 
     # total loss in this case should be equal to cost of hedgil, low precision due to exchanging fees + slippage
-    assert pytest.approx(tokenB_loss + tokenA_loss_in_tokenB, rel=5e-2) == hedgil_position["cost"]
+    assert (
+        pytest.approx(tokenB_loss + tokenA_loss_in_tokenB, rel=5e-2)
+        == hedgil_position["cost"]
+    )
+
 
 def test_open_position_price_change_tokenB(
     chain,
@@ -199,7 +232,7 @@ def test_open_position_price_change_tokenB(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -223,8 +256,14 @@ def test_open_position_price_change_tokenB(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 2% of tokenA reserves
-    tokenB_dump = lp_token.getReserves()[0] / 50 if lp_token.token0() == tokenB else lp_token.getReserves()[1] / 50
-    print(f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}")
+    tokenB_dump = (
+        lp_token.getReserves()[0] / 50
+        if lp_token.token0() == tokenB
+        else lp_token.getReserves()[1] / 50
+    )
+    print(
+        f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}"
+    )
     actions.dump_token(tokenB_whale, tokenB, tokenA, router, tokenB_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
@@ -239,18 +278,32 @@ def test_open_position_price_change_tokenB(
     assert current_amount_B > initial_amount_B
 
     tokenB_excess = current_amount_B - initial_amount_B
-    tokenB_excess_to_tokenA = utils.swap_tokens_value(router, tokenB, tokenA, tokenB_excess)
-    
+    tokenB_excess_to_tokenA = utils.swap_tokens_value(
+        router, tokenB, tokenA, tokenB_excess
+    )
+
     # TokenA checksum: initial amount = current amount + tokenB excess in token A
     total_A_value_now = current_amount_A + tokenB_excess_to_tokenA
-    
+
     assert pytest.approx(total_A_value_now, rel=1e-3) == initial_amount_A
     # Ensure that initial amounts are still intact taking all current data into account
     # A tokens are either in the provider strat or excess
-    assert pytest.approx(tokenA.balanceOf(providerA) + total_A_value_now, rel=1e-3) == amountA
+    assert (
+        pytest.approx(tokenA.balanceOf(providerA) + total_A_value_now, rel=1e-3)
+        == amountA
+    )
     # B tokens are either in provider strat, received from A excess, used to pay hedgil cost and received as hedgil payout
-    assert pytest.approx(tokenB.balanceOf(providerB) + current_amount_B - tokenB_excess + hedgil_position["cost"], rel=1e-3) == amountB
-    
+    assert (
+        pytest.approx(
+            tokenB.balanceOf(providerB)
+            + current_amount_B
+            - tokenB_excess
+            + hedgil_position["cost"],
+            rel=1e-3,
+        )
+        == amountB
+    )
+
     actions.gov_end_epoch(gov, providerA, providerB, joint, vaultA, vaultB)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
     tokenA_loss = vaultA.strategies(providerA)["totalLoss"]
@@ -259,7 +312,11 @@ def test_open_position_price_change_tokenB(
     tokenA_loss_in_tokenB = utils.swap_tokens_value(router, tokenA, tokenB, tokenA_loss)
 
     # total loss in this case should be equal to cost of hedgil, low precision due to exchanging fees + slippage
-    assert pytest.approx(tokenB_loss + tokenA_loss_in_tokenB, rel=5e-2) == hedgil_position["cost"]
+    assert (
+        pytest.approx(tokenB_loss + tokenA_loss_in_tokenB, rel=5e-2)
+        == hedgil_position["cost"]
+    )
+
 
 def test_open_position_price_change_tokenA_rewards(
     chain,
@@ -288,7 +345,7 @@ def test_open_position_price_change_tokenA_rewards(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -312,8 +369,14 @@ def test_open_position_price_change_tokenA_rewards(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 2% of tokenA reserves
-    tokenA_dump = lp_token.getReserves()[0] / 50 if lp_token.token0() == tokenA else lp_token.getReserves()[1] / 50
-    print(f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}")
+    tokenA_dump = (
+        lp_token.getReserves()[0] / 50
+        if lp_token.token0() == tokenA
+        else lp_token.getReserves()[1] / 50
+    )
+    print(
+        f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}"
+    )
     actions.dump_token(tokenA_whale, tokenA, tokenB, router, tokenA_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
@@ -343,9 +406,10 @@ def test_open_position_price_change_tokenA_rewards(
 
     vaultA.strategies(providerA)["totalDebt"] == 0
     vaultB.strategies(providerB)["totalDebt"] == 0
-    
+
     vaultA.strategies(providerA)["totalGain"] > 0
     vaultB.strategies(providerB)["totalGain"] > 0
+
 
 def test_open_position_price_change_tokenB_rewards(
     chain,
@@ -374,7 +438,7 @@ def test_open_position_price_change_tokenB_rewards(
     dai,
     rewards,
     rewards_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -398,8 +462,14 @@ def test_open_position_price_change_tokenB_rewards(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 2% of tokenA reserves
-    tokenB_dump = lp_token.getReserves()[0] / 50 if lp_token.token0() == tokenB else lp_token.getReserves()[1] / 50
-    print(f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}")
+    tokenB_dump = (
+        lp_token.getReserves()[0] / 50
+        if lp_token.token0() == tokenB
+        else lp_token.getReserves()[1] / 50
+    )
+    print(
+        f"Dumping some {tokenB.symbol()}. Selling {tokenB_dump / (10 ** tokenB.decimals())} {tokenB.symbol()}"
+    )
     actions.dump_token(tokenB_whale, tokenB, tokenA, router, tokenB_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
@@ -429,6 +499,6 @@ def test_open_position_price_change_tokenB_rewards(
 
     vaultA.strategies(providerA)["totalDebt"] == 0
     vaultB.strategies(providerB)["totalDebt"] == 0
-    
+
     vaultA.strategies(providerA)["totalGain"] > 0
     vaultB.strategies(providerB)["totalGain"] > 0

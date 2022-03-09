@@ -3,6 +3,7 @@ from utils import actions, checks, utils
 import pytest
 from brownie import Contract, chain, reverts
 
+
 def test_lp_token_airdrop_joint_open(
     chain,
     accounts,
@@ -31,7 +32,7 @@ def test_lp_token_airdrop_joint_open(
     rewards,
     rewards_whale,
     lp_whale,
-):  
+):
     # Deposit to the vault
     actions.user_deposit(user, vaultA, tokenA, amountA)
     actions.user_deposit(user, vaultB, tokenB, amountB)
@@ -55,8 +56,14 @@ def test_lp_token_airdrop_joint_open(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 2% of tokenA reserves
-    tokenA_dump = lp_token.getReserves()[0] / 50 if lp_token.token0() == tokenA else lp_token.getReserves()[1] / 50
-    print(f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}")
+    tokenA_dump = (
+        lp_token.getReserves()[0] / 50
+        if lp_token.token0() == tokenA
+        else lp_token.getReserves()[1] / 50
+    )
+    print(
+        f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}"
+    )
     actions.dump_token(tokenA_whale, tokenA, tokenB, router, tokenA_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
@@ -65,13 +72,13 @@ def test_lp_token_airdrop_joint_open(
 
     # Dump some lp_tokens into the strat while positions are open
     lp_token.transfer(joint, lp_token.balanceOf(lp_whale), {"from": lp_whale})
-    
+
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
     # As we have dumped some lp tokens, both balances should be higher than initial values
     assert current_amount_A > initial_amount_A
     assert current_amount_B > initial_amount_B
-    
+
     # As there is quite a bit of profit, remove healthchecks
     providerA.setDoHealthCheck(False, {"from": gov})
     providerB.setDoHealthCheck(False, {"from": gov})
@@ -86,9 +93,10 @@ def test_lp_token_airdrop_joint_open(
 
     vaultA.strategies(providerA)["totalDebt"] == 0
     vaultB.strategies(providerB)["totalDebt"] == 0
-    
+
     vaultA.strategies(providerA)["totalGain"] > 0
     vaultB.strategies(providerB)["totalGain"] > 0
+
 
 def test_lp_token_airdrop_joint_closed(
     chain,
@@ -118,7 +126,7 @@ def test_lp_token_airdrop_joint_closed(
     rewards,
     rewards_whale,
     lp_whale,
-):  
+):
 
     # Dump some lp_tokens into the strat while positions are closed
     lp_token = Contract(joint.pair())
@@ -133,12 +141,12 @@ def test_lp_token_airdrop_joint_closed(
     # Harvest 1: Send funds through the strategy
     chain.sleep(1)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
-    
+
     # Start the epoch but providerB reverts as there is balanceOfPair()
     providerA.harvest({"from": gov})
-    with reverts(): 
+    with reverts():
         providerB.harvest({"from": gov})
-    
+
     # Existing liquidity in LP is removed to make sure we start clean
     joint.removeLiquidityManually(lp_token.balanceOf(joint), 0, 0, {"from": gov})
 
@@ -151,7 +159,7 @@ def test_lp_token_airdrop_joint_closed(
     assert joint.investedA() > 0
     assert joint.investedB() > 0
     assert joint.activeHedgeID() > 0
-    
+
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
     (initial_amount_A, initial_amount_B) = joint.balanceOfTokensInLP()
@@ -165,20 +173,26 @@ def test_lp_token_airdrop_joint_closed(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Let's move prices, 2% of tokenA reserves
-    tokenA_dump = lp_token.getReserves()[0] / 50 if lp_token.token0() == tokenA else lp_token.getReserves()[1] / 50
-    print(f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}")
+    tokenA_dump = (
+        lp_token.getReserves()[0] / 50
+        if lp_token.token0() == tokenA
+        else lp_token.getReserves()[1] / 50
+    )
+    print(
+        f"Dumping some {tokenA.symbol()}. Selling {tokenA_dump / (10 ** tokenA.decimals())} {tokenA.symbol()}"
+    )
     actions.dump_token(tokenA_whale, tokenA, tokenB, router, tokenA_dump)
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle)
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
-    
+
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
     # As we have dumped some A tokens, there is less liquidity of B
     assert current_amount_A > initial_amount_A
     assert current_amount_B < initial_amount_B
-    
+
     # As there is quite a bit of profit, remove healthchecks
     providerA.setDoHealthCheck(False, {"from": gov})
     providerB.setDoHealthCheck(False, {"from": gov})
@@ -193,15 +207,16 @@ def test_lp_token_airdrop_joint_closed(
 
     vaultA.strategies(providerA)["totalDebt"] == 0
     vaultB.strategies(providerB)["totalDebt"] == 0
-    
+
     vaultA.strategies(providerA)["totalGain"] > 0
     vaultB.strategies(providerB)["totalGain"] > 0
+
 
 def test_lp_token_airdrop_joint_closed_sweep(
     joint,
     gov,
     lp_whale,
-):  
+):
 
     # Dump some lp_tokens into the strat while positions are closed
     lp_token = Contract(joint.pair())
@@ -209,7 +224,7 @@ def test_lp_token_airdrop_joint_closed_sweep(
     # Make sure joint has lp balance
     pre_balance = joint.balanceOfPair()
     assert pre_balance > 0
-    
+
     # Sweep the strat lp_token
     joint.sweep(lp_token, {"from": gov})
     # Ensure there is no more balance in joint
