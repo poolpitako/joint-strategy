@@ -10,6 +10,7 @@ def sync_price(joint):
     lp_token = Contract(joint.pair())
     (reserve0, reserve1, a) = lp_token.getReserves()
     ftm_price = reserve1 / reserve0 * 10 ** 9
+
     print(f"Current price is: {ftm_price/1e9}")
     imp.relay(["FTM"], [ftm_price], [chain.time()], [4281375], {"from": relayer})
 
