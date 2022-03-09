@@ -63,16 +63,29 @@ def strategist(accounts):
 def keeper(accounts):
     yield accounts[5]
 
+@pytest.fixture
+def hedgilV2():
+    yield Contract("0x2bBA5035AeBED1d0f546e31C07c462C1ed9B7597")
+
+@pytest.fixture
+def chainlink_owner():
+    yield accounts.at("0x9ba4c51512752E79317b59AB4577658e12a43f55", force=True)
+
+@pytest.fixture
+def deployer(accounts):
+    yield accounts.at("0xcc4c922db2ef8c911f37e73c03b632dd1585ad0e", force=True)
+
+@pytest.fixture
+def dai():
+    yield Contract(token_addresses["DAI"])
+
 
 token_addresses = {
-    "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",  # WBTC
-    "YFI": "0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e",  # YFI
-    "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",  # WETH
-    "LINK": "0x514910771AF9Ca656af840dff83E8264EcF986CA",  # LINK
-    "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",  # USDT
-    "DAI": "0x6B175474E89094C44Da98b954EedeAC495271d0F",  # DAI
+    "YFI": "0x29b0Da86e484E1C0029B56e817912d778aC0EC69",  # YFI
+    "WETH": "0x74b23882a30290451A17c44f4F05243b6b58C76d",  # WETH
+    "DAI": "0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E",  # DAI
     "USDC": "0x04068DA6C83AFCFA0e13ba15A6696662335D5B75",  # USDC
-    "SUSHI": "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2",  # SUSHI
+    "SUSHI": "0xae75A438b2E0cB8Bb01Ec1E1e376De11D44477CC",  # SUSHI
     "MIM": "0x82f0b8b456c1a451378467398982d4834b6829c1", # MIM
     "WFTM": "0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83", # WFTM
     "SPIRIT": "0x5Cc61A78F164885776AA610fb0FE1257df78E59B", # SPIRIT
@@ -88,8 +101,8 @@ token_addresses = {
         # 'LINK', # LINK
         # 'USDT', # USDT
         # 'DAI', # DAI
-        # 'USDC', # USDC
-        "WFTM", 
+        'USDC', # USDC
+        # "WFTM", 
     ],
     scope="session",
     autouse=True,
@@ -107,7 +120,8 @@ def tokenA(request):
         # 'LINK', # LINK
         # 'USDT', # USDT
         # 'DAI', # DAI
-        "USDC",  # USDC
+        # "USDC",  # USDC
+        'WFTM',
         # "MIM",
     ],
     scope="session",
@@ -118,18 +132,26 @@ def tokenB(request):
 
 
 whale_addresses = {
-    "WBTC": "0x28c6c06298d514db089934071355e5743bf21d60",
-    "WETH": "0xc564ee9f21ed8a2d8e7e76c085740d5e4c5fafbe",
-    "LINK": "0x28c6c06298d514db089934071355e5743bf21d60",
-    "YFI": "0x28c6c06298d514db089934071355e5743bf21d60",
-    "USDT": "0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503",
-    "USDC": "0xa7821C3e9fC1bF961e280510c471031120716c3d",
-    "DAI": "0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503",
-    "SUSHI": "0xf977814e90da44bfa03b6295a0616a897441acec",
+    "YFI": "0x29b0Da86e484E1C0029B56e817912d778aC0EC69",
+    "WETH": "0x74b23882a30290451A17c44f4F05243b6b58C76d",
+    "USDC": "0xbcab7d083Cf6a01e0DdA9ed7F8a02b47d125e682",
+    "DAI": "0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E",
+    "SUSHI": "0xae75A438b2E0cB8Bb01Ec1E1e376De11D44477CC",
     "WFTM": "0x5AA53f03197E08C4851CAD8C92c7922DA5857E5d",
     "MIM": "0x2dd7C9371965472E5A5fD28fbE165007c61439E1",
+    "BOO": "0xE0c15e9Fe90d56472D8a43da5D3eF34ae955583C",
 }
 
+lp_whales = {
+    "BOO": {
+        "USDC": {
+            "WFTM": "0xE6939A804b3C7570Ff5f36c1f0d886dAD4b4A204"
+        }
+    }
+} 
+@pytest.fixture(scope="session", autouse=True)
+def lp_whale(rewards, tokenA, tokenB):
+    yield lp_whales[rewards.symbol()][tokenA.symbol()][tokenB.symbol()]
 
 @pytest.fixture(scope="session", autouse=True)
 def tokenA_whale(tokenA):
@@ -192,7 +214,7 @@ mc_pids = {
 
 @pytest.fixture
 def mc_pid(tokenA, tokenB):
-    yield mc_pids[tokenA.symbol()][tokenB.symbol()]
+    yield mc_pids[tokenB.symbol()][tokenA.symbol()]
 
 
 router_addresses = {
@@ -207,6 +229,20 @@ router_addresses = {
 def router(rewards):
     yield Contract(router_addresses[rewards.symbol()])
 
+# Non-comprehensive, find the full list here to add your own: https://docs.chain.link/docs/fantom-price-feeds/
+oracle_addresses = {
+    "WFTM": "0xf4766552D15AE4d256Ad41B6cf2933482B0680dc",
+    "USDC": "0x2553f4eeb82d5A26427b8d1106C51499CBa5D99c",
+    "MIM": "0x28de48D3291F31F839274B8d82691c77DF1c5ceD"
+}
+
+@pytest.fixture
+def tokenA_oracle(tokenA):
+    yield Contract(oracle_addresses[tokenA.symbol()])
+
+@pytest.fixture
+def tokenB_oracle(tokenB):
+    yield Contract(oracle_addresses[tokenB.symbol()])
 
 @pytest.fixture
 def weth():
@@ -295,6 +331,7 @@ def joint(
     rewards,
     wftm,
     mc_pid,
+    hedgilV2,
     LPHedgingLibrary,
     gov,
     tokenA,
@@ -309,7 +346,7 @@ def joint(
         router,
         wftm,
         rewards,
-        hedgil_pools[tokenA.symbol()][tokenB.symbol()],
+        hedgilV2,
         masterchef,
         mc_pid,
     )
@@ -347,17 +384,16 @@ def providerB(strategist, keeper, vaultB, ProviderStrategy, gov):
 hedgil_pools = {
         "WFTM" :
             {
-                "MIM": "0xC0176FAa0e20dFf3CB6B810aEaE64ef271B1b64b"
+                "MIM": "0xC0176FAa0e20dFf3CB6B810aEaE64ef271B1b64b",
                 "MIM": "0x150C42e9CB21354030967579702e0f010e208E86",
                 "USDC": "0x8C2cC5ff69Bc3760d7Ce81812A2848421495972A",
             }
     }
 
 @pytest.fixture(autouse=True)
-def provideLiquidity(tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB):
-    hedgil = Contract(hedgil_pools[tokenA.symbol()][tokenB.symbol()])
-    tokenB.approve(hedgil, 2 ** 256 - 1, {'from': tokenB_whale, 'gas_price': '0'})
-    hedgil.provideLiquidity(100000 * 10 ** tokenB.decimals(), 0, tokenB_whale, {'from': tokenB_whale, 'gas_price': '0'})
+def provideLiquidity(hedgilV2, tokenA, tokenB, tokenA_whale, tokenB_whale, amountA, amountB):
+    tokenB.approve(hedgilV2, 2 ** 256 - 1, {'from': tokenB_whale, 'gas_price': '0'})
+    hedgilV2.provideLiquidity(100_000 * 10 ** tokenB.decimals(), 0, tokenB_whale, {'from': tokenB_whale, 'gas_price': '0'})
 
 # @pytest.fixture
 # def cloned_strategy(Strategy, vault, strategy, strategist, gov):
