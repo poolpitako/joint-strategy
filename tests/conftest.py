@@ -1,9 +1,8 @@
 import pytest
-from brownie import config, web3, Wei
-from brownie import Contract, accounts
-from brownie.network import gas_price
-from brownie.network.gas.strategies import LinearScalingStrategy
-from brownie import chain
+
+from brownie import accounts, chain, config, Contract, web3, Wei
+from brownie.network import gas_price, gas_limit
+import requests
 
 # Function scoped isolation fixture to enable xdist.
 # Snapshots the chain before each test and reverts after test completion.
@@ -11,6 +10,25 @@ from brownie import chain
 def shared_setup(fn_isolation):
     pass
 
+@pytest.fixture(scope="session", autouse=False)
+def tenderly_fork(web3):
+    gas_price(1)
+    fork_base_url = "https://simulate.yearn.network/fork"
+    payload = {"network_id": "250"}
+    resp = requests.post(fork_base_url, headers={}, json=payload)
+    fork_id = resp.json()["simulation_fork"]["id"]
+    fork_rpc_url = f"https://rpc.tenderly.co/fork/{fork_id}"
+    print(fork_rpc_url)
+    tenderly_provider = web3.HTTPProvider(fork_rpc_url, {"timeout": 600})
+    web3.provider = tenderly_provider
+    print(f"https://dashboard.tenderly.co/yearn/yearn-web/fork/{fork_id}")
+
+@pytest.fixture(scope="module", autouse=True)
+def donate(wftm, accounts, gov):
+    donor = accounts.at(wftm, force=True)
+    for i in range(10):
+        donor.transfer(accounts[i], 100e18)
+    donor.transfer(gov, 100e18)
 
 @pytest.fixture(scope="session", autouse=True)
 def reset_chain(chain):
@@ -22,83 +40,82 @@ def reset_chain(chain):
     print(f"Reset Height: {chain.height}")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def gov(accounts):
-    accounts[0].transfer("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", 100e18)
     yield accounts.at("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", force=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def strat_ms(accounts):
     yield accounts.at("0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7", force=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def user(accounts):
     yield accounts[0]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def stable():
     yield True
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def rewards(accounts):
     yield accounts[1]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def guardian(accounts):
     yield accounts[2]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def management(accounts):
     yield accounts[3]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def strategist(accounts):
     yield accounts[4]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def keeper(accounts):
     yield accounts[5]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def hedgilV2():
     yield Contract("0x2bBA5035AeBED1d0f546e31C07c462C1ed9B7597")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def chainlink_owner():
     yield accounts.at("0x9ba4c51512752E79317b59AB4577658e12a43f55", force=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def deployer(accounts):
     yield accounts.at("0xcc4c922db2ef8c911f37e73c03b632dd1585ad0e", force=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def dai():
     yield Contract(token_addresses["DAI"])
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def lp_token():
     yield Contract("0x41adAc6C1Ff52C5e27568f27998d747F7b69795B")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def lp_depositor_solidex():
     yield Contract("0x26E1A0d851CF28E697870e1b7F053B605C8b060F")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def solidex_factory():
     yield Contract("0x3fAaB499b519fdC5819e3D7ed0C26111904cbc28")
 
@@ -264,35 +281,35 @@ oracle_addresses = {
 }
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def tokenA_oracle(tokenA):
     yield Contract(oracle_addresses[tokenA.symbol()])
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def tokenB_oracle(tokenB):
     yield Contract(oracle_addresses[tokenB.symbol()])
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def weth():
     token_address = "0x74b23882a30290451A17c44f4F05243b6b58C76d"
     yield Contract(token_address)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def wftm():
     token_address = token_addresses["WFTM"]
     yield Contract(token_address)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def usdc():
     token_address = token_addresses["USDC"]
     yield Contract(token_address)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mim():
     token_address = token_addresses["MIM"]
     yield Contract(token_address)
@@ -379,7 +396,6 @@ def joint(
     weth,
     mc_pid,
     hedgilV2,
-    LPHedgingLibrary,
     gov,
     tokenA,
     tokenB,
@@ -484,7 +500,7 @@ def withdraw_no_losses(vault, token, amount, user):
     assert token.balanceOf(user) >= amount
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="session", autouse=False)
 def LPHedgingLibrary(LPHedgingLib, gov):
     yield gov.deploy(LPHedgingLib)
 
@@ -555,3 +571,11 @@ def auth_yswaps(joint, trade_factory, yMechs_multisig):
     trade_factory.grantRole(
         trade_factory.STRATEGY(), joint, {"from": yMechs_multisig, "gas_price": 0}
     )
+
+@pytest.fixture(autouse=True)
+def trade_factory(joint, yMechs_multisig):
+    tf = Contract(joint.tradeFactory())
+    tf.grantRole(
+        tf.STRATEGY(), joint, {"from": yMechs_multisig, "gas_price": 0}
+    )
+    yield tf
