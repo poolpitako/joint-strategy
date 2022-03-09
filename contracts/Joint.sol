@@ -15,6 +15,8 @@ import "../interfaces/uni/IUniswapV2Pair.sol";
 import "../interfaces/IMasterChef.sol";
 import "../interfaces/IERC20Extended.sol";
 
+import "./ySwapper.sol";
+
 import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
 
 import {VaultAPI} from "@yearnvaults/contracts/BaseStrategy.sol";
@@ -31,7 +33,7 @@ interface ProviderStrategy {
     function totalDebt() external view returns (uint256);
 }
 
-abstract contract Joint {
+abstract contract Joint is ySwapper {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -299,18 +301,26 @@ abstract contract Joint {
 
         depositLP();
 
+        if(tradesEnabled == false && tradeFactory != address(0)){
+            _setUpTradeFactory();
+        }
+
         if (balanceOfStake() != 0 || balanceOfPair() != 0) {
             _returnLooseToProviders();
         }
     }
 
+    function getYSwapTokens() internal view override virtual returns (address[] memory, address[] memory) {}
+
+    function removeTradeFactoryPermissions() external override virtual onlyVaultManagers {
+    }
+    
+    function updateTradeFactoryPermissions(address _newTradeFactory) external override virtual onlyGovernance {
+    }
+
     // Keepers will claim and sell rewards mid-epoch (otherwise we sell only in the end)
     function harvest() external onlyKeepers {
         getReward();
-        
-        // TODO: use ySwaps
-        (address rewardSwappedTo, uint256 rewardSwapOutAmount) =
-            swapReward(balanceOfReward());
     }
 
     function harvestTrigger() external view returns (bool) {
@@ -322,6 +332,7 @@ abstract contract Joint {
     function estimatedTotalAssetsAfterBalance()
         public
         view
+        virtual
         returns (uint256 _aBalance, uint256 _bBalance)
     {
         uint256 rewardsPending = pendingReward().add(balanceOfReward());
@@ -398,7 +409,7 @@ abstract contract Joint {
         uint256 currentB,
         uint256 startingA,
         uint256 startingB
-    ) internal view returns (address _sellToken, uint256 _sellAmount) {
+    ) internal virtual view returns (address _sellToken, uint256 _sellAmount) {
         if (startingA == 0 || startingB == 0) return (address(0), 0);
 
         (uint256 ratioA, uint256 ratioB) =
@@ -493,6 +504,7 @@ abstract contract Joint {
 
     function createLP()
         internal
+        virtual
         returns (
             uint256,
             uint256,
@@ -560,6 +572,7 @@ abstract contract Joint {
     function withdrawLP() internal virtual;
 
     function swapReward(uint256 _rewardBal)
+        virtual 
         internal
         returns (address, uint256)
     {
@@ -586,7 +599,7 @@ abstract contract Joint {
         address _tokenFrom,
         address _tokenTo,
         uint256 _amountIn
-    ) internal returns (uint256 _amountOut) {
+    ) internal virtual returns (uint256 _amountOut) {
         uint256[] memory amounts =
             IUniswapV2Router02(router).swapExactTokensForTokens(
                 _amountIn,
@@ -598,7 +611,7 @@ abstract contract Joint {
         _amountOut = amounts[amounts.length - 1];
     }
 
-    function _closePosition() internal returns (uint256, uint256) {
+    function _closePosition() internal virtual returns (uint256, uint256) {
         // Unstake LP from staking contract
         withdrawLP();
 
@@ -639,7 +652,7 @@ abstract contract Joint {
         }
     }
 
-    function getPair() internal view returns (address) {
+    function getPair() internal view virtual returns (address) {
         address factory = IUniswapV2Router02(router).factory();
         return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
     }
@@ -695,7 +708,7 @@ abstract contract Joint {
         uint256 amount,
         uint256 expectedBalanceA,
         uint256 expectedBalanceB
-    ) external onlyVaultManagers {
+    ) external virtual onlyVaultManagers {
         IUniswapV2Router02(router).removeLiquidity(
             tokenA,
             tokenB,
@@ -706,7 +719,7 @@ abstract contract Joint {
             now
         );
         require(expectedBalanceA <= balanceOfA(), "!sandwidched");
-        require(expectedBalanceA <= balanceOfB(), "!sandwidched");
+        require(expectedBalanceB <= balanceOfB(), "!sandwidched");
     }
 
     function swapTokenForTokenManually(
