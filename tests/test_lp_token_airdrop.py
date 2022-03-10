@@ -71,7 +71,7 @@ def test_lp_token_airdrop_joint_open(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # Dump some lp_tokens into the strat while positions are open
-    lp_token.transfer(joint, lp_token.balanceOf(lp_whale), {"from": lp_whale})
+    lp_token.transfer(joint, lp_token.balanceOf(lp_whale) / 2, {"from": lp_whale})
 
     (current_amount_A, current_amount_B) = joint.balanceOfTokensInLP()
 
@@ -130,7 +130,7 @@ def test_lp_token_airdrop_joint_closed(
 
     # Dump some lp_tokens into the strat while positions are closed
     lp_token = Contract(joint.pair())
-    lp_token.transfer(joint, lp_token.balanceOf(lp_whale), {"from": lp_whale})
+    lp_token.transfer(joint, lp_token.balanceOf(lp_whale) / 2, {"from": lp_whale})
     # Make sure joint has lp balance
     assert joint.balanceOfPair() > 0
 

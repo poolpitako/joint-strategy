@@ -179,7 +179,7 @@ def test_extreme_price_movement_tokenA_with_rewards(
     assert current_amount_A > initial_amount_A
     assert current_amount_B < initial_amount_B
 
-    actions.dump_rewards(rewards_whale, 4000e18, router, rewards, joint, tokenB)
+    actions.airdrop_rewards(rewards_whale, 4000e18, router, rewards, joint, tokenB)
     assert joint.balanceOfReward() > 0
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
@@ -373,7 +373,7 @@ def test_extreme_price_movement_tokenB_with_rewards(
     assert current_amount_A < initial_amount_A
     assert current_amount_B > initial_amount_B
 
-    actions.dump_rewards(rewards_whale, 4000e18, router, rewards, joint, tokenB)
+    actions.airdrop_rewards(rewards_whale, 4000e18, router, rewards, joint, tokenB)
     assert joint.balanceOfReward() > 0
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
