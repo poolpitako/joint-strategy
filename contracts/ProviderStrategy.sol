@@ -133,7 +133,7 @@ contract ProviderStrategy is BaseStrategyInitializable {
         returns (bool)
     {
         // Delegating decision to joint
-        return JointAPI(joint).shouldStartEpoch() || JointAPI(joint).shouldEndEpoch();
+        return (JointAPI(joint).shouldStartEpoch() && balanceOfWant() > 0) || JointAPI(joint).shouldEndEpoch();
     }
 
     function dontInvestWant() public view returns (bool) {
