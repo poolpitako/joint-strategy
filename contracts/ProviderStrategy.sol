@@ -33,7 +33,7 @@ interface JointAPI {
 
     function router() external view returns (address);
 
-    function migrateProvider(address _newProvider) external view;
+    function migrateProvider(address _newProvider) external;
 
     function shouldEndEpoch() external view returns (bool);
     
