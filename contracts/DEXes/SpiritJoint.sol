@@ -11,7 +11,7 @@ interface ISpiritMasterchef is IMasterchef {
         returns (uint256);
 }
 
-contract SpiritJoint is HedgilJoint {
+contract SpiritJoint is HedgilV2Joint {
     uint256 public pid;
 
     IMasterchef public masterchef;
