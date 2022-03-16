@@ -89,7 +89,7 @@ def keeper(accounts):
 
 @pytest.fixture(scope="session")
 def hedgilV2():
-    yield Contract("0x2bBA5035AeBED1d0f546e31C07c462C1ed9B7597")
+    yield Contract("0x6E7d6Daa034fD0188f879E5648f63D821F7C0702")
 
 
 @pytest.fixture(scope="session")
@@ -176,15 +176,15 @@ def dex(request):
     params=[
         # 'WBTC', # WBTC
         # "YFI",  # YFI
-        # "ETH",  # WETH
+        "ETH",  # WETH
         # 'LINK', # LINK
         'fUSDT', # USDT
-        # 'DAI', # DAI
+        'DAI', # DAI
         # "WFTM",
-        # "USDC",  # USDC
+        "USDC",  # USDC
         # "WFTM",
         # "BOO",
-        # "BTC",
+        "BTC",
     ],
     scope="session",
     autouse=True,
@@ -503,7 +503,6 @@ def joint(
             masterchef,
             mc_pid,
         )
-        joint.setMaxPercentageLoss(500, {"from": gov})
     elif (joint_to_use == SolidexJoint):
         joint = gov.deploy(
             joint_to_use,
@@ -515,8 +514,11 @@ def joint(
             lp_depositor,
             stable
         )
-        joint.setMaxPercentageLoss(500, {"from": gov})
     
+    joint.setMaxPercentageLoss(500, {"from": gov})
+    joint.setHedgeBudget(25)
+    joint.setHedgingPeriod(2 * 86400)
+
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})
 

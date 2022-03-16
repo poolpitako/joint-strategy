@@ -10,7 +10,8 @@ def check_vault_empty(vault):
 
 def epoch_started(providerA, providerB, joint, amountA, amountB):
     assert pytest.approx(providerA.estimatedTotalAssets(), rel=2e-3) == amountA
-    assert pytest.approx(providerB.estimatedTotalAssets(), rel=2e-3) == amountB
+    # Less precision toa ccount for hedgil cost!
+    assert pytest.approx(providerB.estimatedTotalAssets(), rel=5e-2) == amountB
 
     assert joint.balanceOfA() == 0
     assert joint.balanceOfB() == 0
