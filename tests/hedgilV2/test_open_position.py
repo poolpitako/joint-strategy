@@ -385,7 +385,7 @@ def test_open_position_price_change_tokenA_rewards(
     assert current_amount_A > initial_amount_A
     assert current_amount_B < initial_amount_B
 
-    actions.airdrop_rewards(rewards_whale, 1000e18, router, rewards, joint, tokenB)
+    actions.airdrop_rewards(rewards_whale, 2000e18, router, rewards, joint, tokenB)
     assert joint.balanceOfReward() > 0
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
@@ -480,7 +480,7 @@ def test_open_position_price_change_tokenB_rewards(
     assert current_amount_A < initial_amount_A
     assert current_amount_B > initial_amount_B
 
-    actions.airdrop_rewards(rewards_whale, 1000e18, router, rewards, joint, tokenB)
+    actions.airdrop_rewards(rewards_whale, 2000e18, router, rewards, joint, tokenB)
     assert joint.balanceOfReward() > 0
 
     utils.print_joint_status(joint, tokenA, tokenB, lp_token, rewards)
