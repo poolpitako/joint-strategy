@@ -163,7 +163,7 @@ def sync_price(token, lp_token, chainlink_owner, deployer, token_oracle, tokenA_
     token0 = Contract(lp_token.token0())
     token1 = Contract(lp_token.token1())
 
-    if token == token0:
+    if token != token0:
         reserveA = reserve0
         reserveB = reserve1
         tokenA = token0
@@ -175,7 +175,7 @@ def sync_price(token, lp_token, chainlink_owner, deployer, token_oracle, tokenA_
         tokenB = token0
 
     pairPrice = (
-        reserveB / reserveA * 10 ** tokenA.decimals() / 10 ** tokenB.decimals() * 1e8
+        reserveA / reserveB * 10 ** tokenB.decimals() / 10 ** tokenA.decimals() * 1e8
     ) * tokenA_oracle.latestAnswer() / 1e8
 
     token_mock_oracle.setPrice(pairPrice, {"from": accounts[0]})
@@ -198,3 +198,17 @@ def airdrop_rewards(rewards_whale, amount_token, router, rewards, joint, token):
     amount_rewards = utils.swap_tokens_value(router, token, rewards, amount_token)
     print(f"Transferring {amount_rewards} {rewards.symbol()} rewards to joint")
     rewards.transfer(joint, amount_rewards, {"from": rewards_whale})
+
+def dump_token_bool_pair(token_whale, tokenFrom, tokenTo, router, amount, stable):
+    tokenFrom.approve(router, 2 ** 256 - 1, {"from": token_whale, "gas_price": 0})
+    router.swapExactTokensForTokensSimple(
+        amount,
+        0,
+        tokenFrom,
+        tokenTo,
+        stable,
+        token_whale,
+        2**256 - 1,
+        {"from": token_whale,
+        "gas_price": 0}
+    )

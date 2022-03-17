@@ -142,3 +142,6 @@ def print_joint_status(joint, tokenA, tokenB, lp_token, rewards):
 
 def swap_tokens_value(router, tokenIn, tokenOut, amountIn):
     return router.getAmountsOut(amountIn, [tokenIn, tokenOut])[1]
+
+def swap_tokens_value_bool_pair(router, tokenIn, tokenOut, amountIn, stable):
+    return router.getAmountsOut(amountIn, [(tokenIn, tokenOut, stable)])[1]
