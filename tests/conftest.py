@@ -176,15 +176,17 @@ def dex(request):
     params=[
         # 'WBTC', # WBTC
         # "YFI",  # YFI
-        "ETH",  # WETH
+        # "ETH",  # WETH
         # 'LINK', # LINK
-        'fUSDT', # USDT
-        'DAI', # DAI
+        # 'fUSDT', # USDT
+        # 'DAI', # DAI
         # "WFTM",
         "USDC",  # USDC
         # "WFTM",
         # "BOO",
-        "BTC",
+        # "BTC",
+        # "MIM",
+        # "FRAX",
     ],
     scope="session",
     autouse=True,
@@ -204,6 +206,7 @@ def tokenA(request):
         # 'DAI', # DAI
         # "USDC",  # USDC
         "WFTM",
+        # "USDC",
         # "MIM",
         # "FRAX",
     ],
@@ -503,6 +506,8 @@ def joint(
             masterchef,
             mc_pid,
         )
+        joint.setHedgeBudget(25)
+        joint.setHedgingPeriod(2 * 86400)
     elif (joint_to_use == SolidexJoint):
         joint = gov.deploy(
             joint_to_use,
@@ -516,8 +521,6 @@ def joint(
         )
     
     joint.setMaxPercentageLoss(500, {"from": gov})
-    joint.setHedgeBudget(25)
-    joint.setHedgingPeriod(2 * 86400)
 
     providerA.setJoint(joint, {"from": gov})
     providerB.setJoint(joint, {"from": gov})
