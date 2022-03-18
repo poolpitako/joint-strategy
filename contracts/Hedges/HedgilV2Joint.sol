@@ -76,7 +76,6 @@ abstract contract HedgilV2Joint is Joint {
 
         isHedgingEnabled = true;
 
-        IERC20(tokenB).approve(_hedgilPool, type(uint256).max);
     }
 
     function getHedgeBudget(address token)
@@ -189,12 +188,19 @@ abstract contract HedgilV2Joint is Joint {
         // Only able to open a new position if no active options
         require(activeHedgeID == 0); // dev: already-open
         uint256 strikePrice;
+        // Set hedgil allowance to tokenB balance (invested in LP and free in joint) * hedge budget
+        (, uint256 LPbalanceB) = balanceOfTokensInLP();
+        IERC20(tokenB).approve(hedgilPool, (balanceOfB().add(LPbalanceB))
+                    .mul(getHedgeBudget(tokenB))
+                    .div(RATIO_PRECISION));
+        // Open hedgil position
         (activeHedgeID, strikePrice) = IHedgilPool(hedgilPool).hedgeLPToken(
             address(_pair),
             protectionRange,
             period
         );
-
+        // Remove hedgil allowance
+        IERC20(tokenB).approve(hedgilPool, 0);
         require(
             _isWithinRange(strikePrice, maxSlippageOpen) || skipManipulatedCheck
         ); // dev: !open-price

@@ -121,6 +121,7 @@ def test_open_position_price_change_tokenA(
     actions.gov_start_epoch(
         gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
+    assert tokenB.allowance(joint, hedgilV2) == 0
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle, tokenA_oracle)
     (initial_amount_A, initial_amount_B) = joint.balanceOfTokensInLP()
 
@@ -195,7 +196,6 @@ def test_open_position_price_change_tokenA(
         pytest.approx(tokenB_loss + tokenA_loss_in_tokenB, rel=5e-2)
         == hedgil_position["cost"]
     )
-
 
 def test_open_position_price_change_tokenB(
     chain,
