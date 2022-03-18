@@ -399,11 +399,11 @@ def test_open_position_price_change_tokenA_rewards(
     assert tokenA_loss == 0
     assert tokenB_loss == 0
 
-    vaultA.strategies(providerA)["totalDebt"] == 0
-    vaultB.strategies(providerB)["totalDebt"] == 0
+    assert vaultA.strategies(providerA)["totalDebt"] == 0
+    assert vaultB.strategies(providerB)["totalDebt"] == 0
 
-    vaultA.strategies(providerA)["totalGain"] > 0
-    vaultB.strategies(providerB)["totalGain"] > 0
+    assert vaultA.strategies(providerA)["totalGain"] > 0
+    assert vaultB.strategies(providerB)["totalGain"] > 0
 
 
 def test_open_position_price_change_tokenB_rewards(
@@ -494,8 +494,8 @@ def test_open_position_price_change_tokenB_rewards(
     assert tokenA_loss == 0
     assert tokenB_loss == 0
 
-    vaultA.strategies(providerA)["totalDebt"] == 0
-    vaultB.strategies(providerB)["totalDebt"] == 0
+    assert vaultA.strategies(providerA)["totalDebt"] == 0
+    assert vaultB.strategies(providerB)["totalDebt"] == 0
 
-    vaultA.strategies(providerA)["totalGain"] > 0
-    vaultB.strategies(providerB)["totalGain"] > 0
+    assert vaultA.strategies(providerA)["totalGain"] > 0
+    assert vaultB.strategies(providerB)["totalGain"] > 0
