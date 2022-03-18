@@ -212,3 +212,14 @@ def dump_token_bool_pair(token_whale, tokenFrom, tokenTo, router, amount, stable
         {"from": token_whale,
         "gas_price": 0}
     )
+
+def sell_token_path(router, amount, path, address_from, address_to):
+    print(f"Selling {amount} following path {path}")
+    router.swapExactTokensForTokens(
+        amount,
+        0,
+        path,
+        address_to,
+        2 ** 256 - 1,
+        {"from": address_from, "gas_price": 0},
+    )
