@@ -149,8 +149,8 @@ def live_vaultB(registry, tokenB):
 # Select the type of hedge to use for the joint
 @pytest.fixture(
     params=[
-        "nohedge",
-        # "hedgilV2",
+        # "nohedge",
+        "hedgilV2",
         # "hegic"
     ],
     scope="session",
@@ -161,10 +161,10 @@ def hedge_type(request):
 @pytest.fixture(
     params=[
         # "SUSHI",
-        "SOLID",
+        # "SOLID",
         # "SPIRIT",
         # "UNI",
-        # "SPOOKY"
+        "SPOOKY"
     ],
     scope="session",
     autouse=True,)
@@ -181,12 +181,12 @@ def dex(request):
         # 'fUSDT', # USDT
         # 'DAI', # DAI
         # "WFTM",
-        # "USDC",  # USDC
+        "USDC",  # USDC
         # "WFTM",
         # "BOO",
         # "BTC",
         # "MIM",
-        "FRAX",
+        # "FRAX",
     ],
     scope="session",
     autouse=True,
@@ -205,8 +205,8 @@ def tokenA(request):
         # 'USDT', # USDT
         # 'DAI', # DAI
         # "USDC",  # USDC
-        # "WFTM",
-        "USDC",
+        "WFTM",
+        # "USDC",
         # "MIM",
         # "FRAX",
     ],
@@ -217,8 +217,8 @@ def tokenB(request):
     yield Contract(token_addresses[request.param])
 
 @pytest.fixture(params=[
-    "SEX",
-    # "BOO"
+    # "SEX",
+    "BOO"
     ], scope="session", autouse=True)
 def rewards(request):
     rewards_address = token_addresses[request.param]  # sushi

@@ -36,6 +36,7 @@ def test_return_loose_to_providers_manually(
     actions.gov_start_epoch(
         gov, providerA, providerB, joint, vaultA, vaultB, amountA, amountB
     )
+    assert tokenB.allowance(joint, hedgilV2) == 0
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle, tokenA_oracle)
     (initial_amount_A, initial_amount_B) = joint.balanceOfTokensInLP()
 
