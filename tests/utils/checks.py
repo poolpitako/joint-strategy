@@ -76,6 +76,6 @@ def check_accounting(vault, strategy, totalGain, totalLoss, totalDebt):
     assert status["totalDebt"] == totalDebt
     return
 
-def check_run_test(test_type, hedge_type):
-    if hedge_type != test_type:
+def check_run_test(value, variable):
+    if variable != value:
         pytest.skip()
