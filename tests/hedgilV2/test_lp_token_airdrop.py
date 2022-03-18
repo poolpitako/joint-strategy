@@ -95,11 +95,11 @@ def test_lp_token_airdrop_joint_open(
     assert tokenA_loss == 0
     assert tokenB_loss == 0
 
-    vaultA.strategies(providerA)["totalDebt"] == 0
-    vaultB.strategies(providerB)["totalDebt"] == 0
+    assert vaultA.strategies(providerA)["totalDebt"] == 0
+    assert vaultB.strategies(providerB)["totalDebt"] == 0
 
-    vaultA.strategies(providerA)["totalGain"] > 0
-    vaultB.strategies(providerB)["totalGain"] > 0
+    assert vaultA.strategies(providerA)["totalGain"] > 0
+    assert vaultB.strategies(providerB)["totalGain"] > 0
 
 
 def test_lp_token_airdrop_joint_closed(
@@ -211,11 +211,11 @@ def test_lp_token_airdrop_joint_closed(
     assert tokenA_loss == 0
     assert tokenB_loss == 0
 
-    vaultA.strategies(providerA)["totalDebt"] == 0
-    vaultB.strategies(providerB)["totalDebt"] == 0
+    assert vaultA.strategies(providerA)["totalDebt"] == 0
+    assert vaultB.strategies(providerB)["totalDebt"] == 0
 
-    vaultA.strategies(providerA)["totalGain"] > 0
-    vaultB.strategies(providerB)["totalGain"] > 0
+    assert vaultA.strategies(providerA)["totalGain"] > 0
+    assert vaultB.strategies(providerB)["totalGain"] > 0
 
 
 def test_lp_token_airdrop_joint_closed_sweep(

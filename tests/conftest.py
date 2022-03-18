@@ -149,8 +149,8 @@ def live_vaultB(registry, tokenB):
 # Select the type of hedge to use for the joint
 @pytest.fixture(
     params=[
-        # "nohedge",
-        "hedgilV2",
+        "nohedge",
+        # "hedgilV2",
         # "hegic"
     ],
     scope="session",
@@ -161,10 +161,10 @@ def hedge_type(request):
 @pytest.fixture(
     params=[
         # "SUSHI",
-        # "SOLID",
+        "SOLID",
         # "SPIRIT",
         # "UNI",
-        "SPOOKY"
+        # "SPOOKY"
     ],
     scope="session",
     autouse=True,)
@@ -181,12 +181,12 @@ def dex(request):
         # 'fUSDT', # USDT
         # 'DAI', # DAI
         # "WFTM",
-        "USDC",  # USDC
+        # "USDC",  # USDC
         # "WFTM",
         # "BOO",
         # "BTC",
         # "MIM",
-        # "FRAX",
+        "FRAX",
     ],
     scope="session",
     autouse=True,
@@ -205,8 +205,8 @@ def tokenA(request):
         # 'USDT', # USDT
         # 'DAI', # DAI
         # "USDC",  # USDC
-        "WFTM",
-        # "USDC",
+        # "WFTM",
+        "USDC",
         # "MIM",
         # "FRAX",
     ],
@@ -217,8 +217,8 @@ def tokenB(request):
     yield Contract(token_addresses[request.param])
 
 @pytest.fixture(params=[
-    # "SEX",
-    "BOO"
+    "SEX",
+    # "BOO"
     ], scope="session", autouse=True)
 def rewards(request):
     rewards_address = token_addresses[request.param]  # sushi
@@ -266,7 +266,7 @@ token_addresses = {
 
 whale_addresses = {
     "SOLID": "0x1d1A1871d1830D4b5087212c820E5f1252379c2c",
-    "SEX": "0x1434f19804789e494E271F9CeF8450e51790fcD2",
+    "SEX": "0xDcC208496B8fcc8E99741df8c6b8856F1ba1C71F",
     "YFI": "0x29b0Da86e484E1C0029B56e817912d778aC0EC69",
     "ETH": "0x25c130B2624CF12A4Ea30143eF50c5D68cEFA22f",
     "USDC": "0xbcab7d083Cf6a01e0DdA9ed7F8a02b47d125e682",

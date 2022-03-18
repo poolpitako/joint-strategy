@@ -21,9 +21,11 @@ def test_profitable_harvest(
     gov,
     tokenA_whale,
     tokenB_whale,
-    hedge_type
+    hedge_type,
+    dex,
 ):
     checks.check_run_test("nohedge", hedge_type)
+    checks.check_run_test("SOLID", dex)
     solid_token = Contract(joint.SOLID_SEX())
     sex_token = Contract(joint.SEX())
     # Deposit to the vault
@@ -122,9 +124,11 @@ def test_manual_exit(
     gov,
     tokenA_whale,
     tokenB_whale,
-    hedge_type
+    hedge_type,
+    dex,
 ):
     checks.check_run_test("nohedge", hedge_type)
+    checks.check_run_test("SOLID", dex)
     solid_token = Contract(joint.SOLID_SEX())
     sex_token = Contract(joint.SEX())
     # Deposit to the vault
@@ -219,9 +223,11 @@ def test_profitable_with_big_imbalance_harvest(
     tokenB_whale,
     router,
     swap_from,
-    hedge_type
+    hedge_type,
+    dex,
 ):
     checks.check_run_test("nohedge", hedge_type)
+    checks.check_run_test("SOLID", dex)
     solid_token = Contract(joint.SOLID_SEX())
     sex_token = Contract(joint.SEX())
 
@@ -260,8 +266,10 @@ def test_profitable_with_big_imbalance_harvest(
     token_in = tokenA if swap_from == "a" else tokenB
     token_in_whale = tokenA_whale if swap_from == "a" else tokenB_whale
     token_in.approve(router, 2**256 - 1, {"from": token_in_whale, "gas_price": 0})
+    (resA, resB) = joint.getReserves()
+    amount = resA / 10 if swap_from == "a" else resB / 10
     router.swapExactTokensForTokensSimple(
-        10_000_000 * 10 ** token_in.decimals(),
+        amount,
         0,
         token_in,
         tokenB if swap_from == "a" else tokenA,
@@ -340,9 +348,11 @@ def test_profitable_harvest_yswaps(
     wftm,
     trade_factory,
     yMechs_multisig,
-    hedge_type
+    hedge_type,
+    dex,
 ):
     checks.check_run_test("nohedge", hedge_type)
+    checks.check_run_test("SOLID", dex)
     solid_token = Contract(joint.SOLID_SEX())
     sex_token = Contract(joint.SEX())
 
