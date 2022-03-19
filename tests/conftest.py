@@ -89,7 +89,7 @@ def keeper(accounts):
 
 @pytest.fixture(scope="session")
 def hedgilV2():
-    yield Contract("0x6E7d6Daa034fD0188f879E5648f63D821F7C0702")
+    yield Contract("0xB6bdB19b7E1042CA3dD7b62048827d10C5e3a7FA")
 
 
 @pytest.fixture(scope="session")
