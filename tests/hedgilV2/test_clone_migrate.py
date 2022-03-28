@@ -9,6 +9,7 @@ def test_clone_joint(
     providerA,
     providerB,
     router,
+    gov,
     wftm,
     rewards,
     hedgilV2,
@@ -28,6 +29,7 @@ def test_clone_joint(
             hedgilV2,
             masterchef,
             mc_pid,
+            {"from": gov}
         ).return_value
         cloned_joint = SpookyJoint.at(cloned_joint)
     else:
@@ -231,8 +233,8 @@ def test_migrate_joint_and_unwind(
     assert cloned_joint.estimatedTotalAssetsAfterBalance()[1] == 0
 
     # Set providers to new joint
-    providerA.setJoint(joint, {"from": gov})
-    providerB.setJoint(joint, {"from": gov})
+    providerA.setJoint(cloned_joint, {"from": gov})
+    providerB.setJoint(cloned_joint, {"from": gov})
 
     # Unwind old joint position
     joint.claimRewardManually()

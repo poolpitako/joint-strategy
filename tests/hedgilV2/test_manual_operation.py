@@ -54,13 +54,13 @@ def test_return_loose_to_providers_manually(
     assert rewards.balanceOf(joint) == 0
 
     # Claim rewards manually
-    joint.claimRewardManually()
+    joint.claimRewardManually({"from": gov})
     assert rewards.balanceOf(joint) > 0
 
     # Withdraw Staked LP tokens
-    joint.withdrawLPManually(joint.balanceOfStake())
+    joint.withdrawLPManually(joint.balanceOfStake(), {"from": gov})
     # Remove liquidity manually
-    joint.removeLiquidityManually(lp_token.balanceOf(joint), 0, 0)
+    joint.removeLiquidityManually(lp_token.balanceOf(joint), 0, 0, {"from": gov})
 
     # All balance should be in joint
     assert lp_token.balanceOf(joint) == 0
@@ -69,7 +69,7 @@ def test_return_loose_to_providers_manually(
     assert tokenB.balanceOf(joint) > 0
 
     # Send back to providers
-    joint.returnLooseToProvidersManually()
+    joint.returnLooseToProvidersManually({"from": gov})
     assert tokenA.balanceOf(joint) == 0
     assert tokenB.balanceOf(joint) == 0
 
@@ -80,7 +80,7 @@ def test_return_loose_to_providers_manually(
     # Close hedge manually
     hedgil_position = hedgilV2.getHedgilByID(hedgil_id)
     assert hedgil_position["expiration"] > 0
-    joint.closeHedgeManually()
+    joint.closeHedgeManually({"from": gov})
     hedgil_position = hedgilV2.getHedgilByID(hedgil_id)
     assert hedgil_position["expiration"] == 0
 
@@ -130,7 +130,7 @@ def test_liquidate_position_manually(
     utils.print_hedgil_status(joint, hedgilV2, tokenA, tokenB)
 
     # CLose position manually
-    joint.liquidatePositionManually(0, 0)
+    joint.liquidatePositionManually(0, 0, {"from": gov})
     # Hedgil position
     hedgil_position = hedgilV2.getHedgilByID(hedgil_id)
     assert hedgil_position["expiration"] == 0
@@ -175,14 +175,14 @@ def test_swap_tokens_manually(
     actions.sync_price(tokenB, lp_token, chainlink_owner, deployer, tokenB_oracle, tokenA_oracle)
 
     # Get rewards to swap
-    joint.claimRewardManually()
+    joint.claimRewardManually({"from": gov})
     balance_rewards = rewards.balanceOf(joint)
     assert balance_rewards > 0
 
     # Swap half to WFTM
     joint_pre_tokenB = tokenB.balanceOf(joint)
     path = [rewards, tokenB]
-    joint.swapTokenForTokenManually(path, balance_rewards / 2, 0)
+    joint.swapTokenForTokenManually(path, balance_rewards / 2, 0, {"from": gov})
     balance_rewards_post = rewards.balanceOf(joint)
     assert tokenB.balanceOf(joint) > joint_pre_tokenB
     assert pytest.approx(balance_rewards_post, rel=1e-5) == balance_rewards / 2
@@ -190,7 +190,7 @@ def test_swap_tokens_manually(
     # Swap remaining half to tokenA
     joint_pre_tokenA = tokenA.balanceOf(joint)
     path = [rewards, tokenB, tokenA]
-    joint.swapTokenForTokenManually(path, balance_rewards_post, 0)
+    joint.swapTokenForTokenManually(path, balance_rewards_post, 0, {"from": gov})
     assert tokenA.balanceOf(joint) > joint_pre_tokenA
     assert rewards.balanceOf(joint) == 0
 

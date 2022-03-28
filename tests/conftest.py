@@ -44,7 +44,7 @@ def reset_chain(chain):
     
 @pytest.fixture(scope="session")
 def gov(accounts):
-    yield accounts.at("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", force=True)
+    yield accounts.at("0xC0E2830724C946a6748dDFE09753613cd38f6767", force=True)
 
 
 @pytest.fixture(scope="session")
@@ -178,8 +178,8 @@ def dex(request):
         # "YFI",  # YFI
         # "ETH",  # WETH
         # 'LINK', # LINK
-        # 'fUSDT', # USDT
-        # 'DAI', # DAI
+        'fUSDT', # USDT
+        'DAI', # DAI
         # "WFTM",
         "USDC",  # USDC
         # "WFTM",
@@ -506,8 +506,8 @@ def joint(
             masterchef,
             mc_pid,
         )
-        joint.setHedgeBudget(25)
-        joint.setHedgingPeriod(2 * 86400)
+        joint.setHedgeBudget(25, {"from": gov})
+        joint.setHedgingPeriod(2 * 86400, {"from": gov})
     elif (joint_to_use == SolidexJoint):
         joint = gov.deploy(
             joint_to_use,
